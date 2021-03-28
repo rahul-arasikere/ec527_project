@@ -4,6 +4,7 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 
+
 using namespace cv;
 using namespace std;
 
@@ -16,7 +17,8 @@ int main(int argc, char **argv)
     }
     if (argc == 1)
     {
-        VideoCapture camera(0);
+        VideoCapture camera(1);
+        
         if (camera.isOpened() != 1)
         {
             perror("Failed to initialize camera!\n");
