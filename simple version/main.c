@@ -10,32 +10,56 @@
 #define PLATEAU 0
 
 typedef unsigned char image_t, *image_ptr_t;
+typedef float img_t, *img_ptr_t;
 
-void lowest_descent_kernel(image_ptr_t in, image_ptr_t *out, int width, int height);
+img_ptr_t convert2float(image_ptr_t image, int width, int height);
+image_ptr_t convert2image(img_ptr_t image, int width, int height);
+void lowest_descent_kernel(img_ptr_t in, img_ptr_t *out, int width, int height);
 int main(int argc, char **argv);
 
 int main(int argc, char **argv)
 {
     int width, height, channels;
     image_ptr_t data = stbi_load(argv[1], &width, &height, &channels, 0);
-    image_ptr_t lowest_descent = NULL;
-    lowest_descent_kernel(data, &lowest_descent, width, height);
-    // for (int i = 0; i < width; i++)
-    // {
-    //     for (int j = 0; j < width; j++)
-    //     {
-    //         printf("%d, %d: %d\n", i, j, lowest_descent[i * width + j]);
-    //     }
-    // }
-    stbi_write_png("result.png", width, height, channels, lowest_descent, width * channels);
+    img_ptr_t input = convert2float(data, width, height);
     stbi_image_free(data);
+    img_ptr_t lowest_descent = NULL;
+    lowest_descent_kernel(input, &lowest_descent, width, height);
+    image_ptr_t output = convert2image(lowest_descent, width, height);
+    stbi_write_png("result.png", width, height, channels, output, width * channels);
+    free(output);
     free(lowest_descent);
     return 0;
 }
 
-void lowest_descent_kernel(image_ptr_t in, image_ptr_t *out, int width, int height)
+img_ptr_t convert2float(image_ptr_t image, int width, int height)
 {
-    image_ptr_t _lowest = (image_ptr_t)calloc(width * height, sizeof(image_t));
+    img_ptr_t temp = (img_ptr_t)calloc(width * height, sizeof(img_t));
+    for (int i = 0; i < width; i++)
+    {
+        for (int j = 0; j < height; j++)
+        {
+            temp[i * width + j] = (img_t)image[i * width + j];
+        }
+    }
+    return temp;
+}
+image_ptr_t convert2image(img_ptr_t image, int width, int height)
+{
+    image_ptr_t temp = (image_ptr_t)calloc(width * height, sizeof(image_t));
+    for (int i = 0; i < width; i++)
+    {
+        for (int j = 0; j < height; j++)
+        {
+            temp[i * width + j] = (image_t)image[i * width + j];
+        }
+    }
+    return temp;
+}
+
+void lowest_descent_kernel(img_ptr_t in, img_ptr_t *out, int width, int height)
+{
+    img_ptr_t _lowest = (img_ptr_t)calloc(width * height, sizeof(img_t));
     if (_lowest == NULL)
     {
         perror("Failed to allocate memory!\n");
@@ -46,7 +70,7 @@ void lowest_descent_kernel(image_ptr_t in, image_ptr_t *out, int width, int heig
         for (int j = 1; j < width - 1; j++)
         {
             // find minimum in neighbors
-            int min = in[i * width + j];
+            img_t min = (img_t)INFINITY;
             if (min < in[i * width + (j + 1)])
                 min = in[i * width + (j + 1)];
             if (min < in[i * width + (j - 1)])
@@ -63,62 +87,71 @@ void lowest_descent_kernel(image_ptr_t in, image_ptr_t *out, int width, int heig
                 min = in[(i + 1) * width + (j + 1)];
             if (min < in[(i + 1) * width + (j - 1)])
                 min = in[(i + 1) * width + (j - 1)];
+            printf("min @%d,%d: %f\n", i, j, _lowest[i * width + j]);
+            
             // check if we have plateaued
             bool exists_q = false;
-            int p = in[i * width + j];
+            img_t p = in[i * width + j];
             if (p > in[i * width + (j + 1)] && in[i * width + (j + 1)] == min)
             {
-                _lowest[i * width + j] = 255 - (i * width + (j + 1));
+                _lowest[i * width + j] = -(i * width + (j + 1));
                 exists_q = true;
                 goto FOUND_LOWEST_DESCENT;
             }
             if (p > in[i * width + (j - 1)] && in[i * width + (j - 1)] == min)
             {
-                _lowest[i * width + j] = 255 - (i * width + (j - 1));
+                _lowest[i * width + j] = -(i * width + (j - 1));
                 exists_q = true;
                 goto FOUND_LOWEST_DESCENT;
             }
             if (p > in[(i + 1) * width + j] && in[(i + 1) * width + j] == min)
             {
-                _lowest[i * width + j] = 255 - ((i - 1) * width + j);
+                _lowest[i * width + j] = -((i - 1) * width + j);
                 exists_q = true;
                 goto FOUND_LOWEST_DESCENT;
             }
             if (p > in[(i - 1) * width + j] && in[(i - 1) * width + j] == min)
             {
-                _lowest[i * width + j] = 255 - ((i - 1) * width + j);
+                _lowest[i * width + j] = -((i - 1) * width + j);
                 exists_q = true;
                 goto FOUND_LOWEST_DESCENT;
             }
             if (p > in[(i - 1) * width + (j + 1)] && in[(i - 1) * width + (j + 1)] == min)
             {
-                _lowest[i * width + j] = 255 - ((i - 1) * width + (j + 1));
+                _lowest[i * width + j] = -((i - 1) * width + (j + 1));
                 exists_q = true;
                 goto FOUND_LOWEST_DESCENT;
             }
             if (p > in[(i - 1) * width + (j - 1)] && in[(i - 1) * width + (j - 1)] == min)
             {
-                _lowest[i * width + j] = 255 - ((i - 1) * width + (j - 1));
+                _lowest[i * width + j] = -((i - 1) * width + (j - 1));
                 exists_q = true;
                 goto FOUND_LOWEST_DESCENT;
             }
             if (p > in[(i + 1) * width + (j + 1)] && in[(i + 1) * width + (j + 1)] == min)
             {
-                _lowest[i * width + j] = 255 - ((i + 1) * width + (j + 1));
+                _lowest[i * width + j] = -((i + 1) * width + (j + 1));
                 exists_q = true;
                 goto FOUND_LOWEST_DESCENT;
             }
             if (p > in[(i + 1) * width + (j - 1)] && in[(i + 1) * width + (j - 1)] == min)
             {
-                _lowest[i * width + j] = 255 - ((i + 1) * width + (j - 1));
+                _lowest[i * width + j] = -((i + 1) * width + (j - 1));
                 exists_q = true;
                 goto FOUND_LOWEST_DESCENT;
             }
         FOUND_LOWEST_DESCENT:
-            if (!exists_q)
+            if (exists_q == false)
             {
                 _lowest[i * width + j] = PLATEAU;
             }
+        }
+    }
+    for (int i = 0; i < width; i++)
+    {
+        for (int j = 0; j < height; j++)
+        {
+            printf("%d,%d: %f\n", i, j, _lowest[i * width + j]);
         }
     }
     *out = _lowest;
