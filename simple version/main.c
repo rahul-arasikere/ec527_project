@@ -16,11 +16,13 @@ int main(int argc, char **argv);
 
 int main(int argc, char **argv)
 {
-    int width, height, n;
-    image_ptr_t data = stbi_load(argv[1], &width, &height, &n, 0);
+    int width, height, channels;
+    image_ptr_t data = stbi_load(argv[1], &width, &height, &channels, 0);
     image_ptr_t lowest_descent = NULL;
     lowest_descent_kernel(data, &lowest_descent, width, height);
-    stbi_write_bmp("result.bmp", width, height, n, lowest_descent);
+    stbi_write_png("result.png", width, height, channels, lowest_descent, width * channels);
+    stbi_image_free(data);
+    free(lowest_descent);
     return 0;
 }
 
@@ -54,55 +56,54 @@ void lowest_descent_kernel(image_ptr_t in, image_ptr_t *out, int width, int heig
                 min = in[(i + 1) * width + (j + 1)];
             if (min < in[(i + 1) * width + (j - 1)])
                 min = in[(i + 1) * width + (j - 1)];
-
             // check if we have plateaued
             bool exists_q = false;
             int p = in[i * width + j];
             if (p > in[i * width + (j + 1)] && in[i * width + (j + 1)] == min)
             {
-                _lowest[i * width + j] = -in[i * width + (j + 1)];
+                _lowest[i * width + j] = 255 - (i * width + (j + 1));
                 exists_q = true;
                 goto FOUND_LOWEST_DESCENT;
             }
             if (p > in[i * width + (j - 1)] && in[i * width + (j - 1)] == min)
             {
-                _lowest[i * width + j] = -in[i * width + (j - 1)];
+                _lowest[i * width + j] = 255 - (i * width + (j - 1));
                 exists_q = true;
                 goto FOUND_LOWEST_DESCENT;
             }
             if (p > in[(i + 1) * width + j] && in[(i + 1) * width + j] == min)
             {
-                _lowest[i * width + j] = -in[(i - 1) * width + j];
+                _lowest[i * width + j] = 255 - ((i - 1) * width + j);
                 exists_q = true;
                 goto FOUND_LOWEST_DESCENT;
             }
             if (p > in[(i - 1) * width + j] && in[(i - 1) * width + j] == min)
             {
-                _lowest[i * width + j] = -in[(i - 1) * width + j];
+                _lowest[i * width + j] = 255 - ((i - 1) * width + j);
                 exists_q = true;
                 goto FOUND_LOWEST_DESCENT;
             }
             if (p > in[(i - 1) * width + (j + 1)] && in[(i - 1) * width + (j + 1)] == min)
             {
-                _lowest[i * width + j] = -in[(i - 1) * width + (j + 1)];
+                _lowest[i * width + j] = 255 - ((i - 1) * width + (j + 1));
                 exists_q = true;
                 goto FOUND_LOWEST_DESCENT;
             }
             if (p > in[(i - 1) * width + (j - 1)] && in[(i - 1) * width + (j - 1)] == min)
             {
-                _lowest[i * width + j] = -in[(i - 1) * width + (j - 1)];
+                _lowest[i * width + j] = 255 - ((i - 1) * width + (j - 1));
                 exists_q = true;
                 goto FOUND_LOWEST_DESCENT;
             }
             if (p > in[(i + 1) * width + (j + 1)] && in[(i + 1) * width + (j + 1)] == min)
             {
-                _lowest[i * width + j] = -in[(i + 1) * width + (j + 1)];
+                _lowest[i * width + j] = 255 - ((i + 1) * width + (j + 1));
                 exists_q = true;
                 goto FOUND_LOWEST_DESCENT;
             }
             if (p > in[(i + 1) * width + (j - 1)] && in[(i + 1) * width + (j - 1)] == min)
             {
-                _lowest[i * width + j] = in[(i + 1) * width + (j - 1)];
+                _lowest[i * width + j] = 255 - ((i + 1) * width + (j - 1));
                 exists_q = true;
                 goto FOUND_LOWEST_DESCENT;
             }
