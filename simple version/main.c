@@ -154,7 +154,7 @@ void steepest_descent_kernel(img_ptr_t in, img_ptr_t *out, int width, int height
 void border_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int height)
 {
     img_ptr_t _border = (img_ptr_t)calloc(width * height, sizeof(img_t));
-    if (_border == NULL)
+    if (in == NULL)
     {
         perror("Failed to allocate memory!\n");
         exit(EXIT_FAILURE);
@@ -176,56 +176,56 @@ void border_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int
             {
                 if (in[i * width + j] == PLATEAU)
                 {
-                    if (_border[i * width + (j + 1)] < 0 && image[i * width + (j + 1)] == image[i * width + j])
+                    if (in[i * width + (j + 1)] < 0 && image[i * width + (j + 1)] == image[i * width + j])
                     {
                         if (temp_border[i * width + j] != -(i * width + (j + 1)))
                             stable = false;
                         temp_border[i * width + j] = -(i * width + (j + 1));
                         break;
                     }
-                    if (_border[i * width + (j - 1)] < 0 && image[i * width + (j - 1)] == image[i * width + j])
+                    if (in[i * width + (j - 1)] < 0 && image[i * width + (j - 1)] == image[i * width + j])
                     {
                         if (temp_border[i * width + j] != -(i * width + (j - 1)))
                             stable = false;
                         temp_border[i * width + j] = -(i * width + (j - 1));
                         break;
                     }
-                    if (_border[(i + 1) * width + (j + 1)] < 0 && image[(i + 1) * width + (j + 1)] == image[i * width + j])
+                    if (in[(i + 1) * width + (j + 1)] < 0 && image[(i + 1) * width + (j + 1)] == image[i * width + j])
                     {
                         if (temp_border[i * width + j] != -((i + 1) * width + (j + 1)))
                             stable = false;
                         temp_border[i * width + j] = -((i + 1) * width + (j + 1));
                         break;
                     }
-                    if (_border[(i + 1) * width + (j - 1)] < 0 && image[(i + 1) * width + (j - 1)] == image[i * width + j])
+                    if (in[(i + 1) * width + (j - 1)] < 0 && image[(i + 1) * width + (j - 1)] == image[i * width + j])
                     {
                         if (temp_border[i * width + j] != -((i + 1) * width + (j - 1)))
                             stable = false;
                         temp_border[i * width + j] = -((i + 1) * width + (j - 1));
                         break;
                     }
-                    if (_border[(i - 1) * width + (j + 1)] < 0 && image[(i + 1) * width + (j + 1)] == image[i * width + j])
+                    if (in[(i - 1) * width + (j + 1)] < 0 && image[(i - 1) * width + (j + 1)] == image[i * width + j])
                     {
                         if (temp_border[i * width + j] != -((i - 1) * width + (j + 1)))
                             stable = false;
                         temp_border[i * width + j] = -((i - 1) * width + (j + 1));
                         break;
                     }
-                    if (_border[(i - 1) * width + (j - 1)] < 0 && image[(i + 1) * width + (j - 1)] == image[i * width + j])
+                    if (in[(i - 1) * width + (j - 1)] < 0 && image[(i - 1) * width + (j - 1)] == image[i * width + j])
                     {
                         if (temp_border[i * width + j] != -((i - 1) * width + (j - 1)))
                             stable = false;
                         temp_border[i * width + j] = -((i - 1) * width + (j - 1));
                         break;
                     }
-                    if (_border[(i + 1) * width + j] < 0 && image[(i + 1) * width + j] == image[i * width + j])
+                    if (in[(i + 1) * width + j] < 0 && image[(i + 1) * width + j] == image[i * width + j])
                     {
                         if (temp_border[i * width + j] != -((i + 1) * width + j))
                             stable = false;
                         temp_border[i * width + j] = -((i + 1) * width + j);
                         break;
                     }
-                    if (_border[(i - 1) * width + j] < 0 && image[(i - 1) * width + j] == image[i * width + j])
+                    if (in[(i - 1) * width + j] < 0 && image[(i - 1) * width + j] == image[i * width + j])
                     {
                         if (temp_border[i * width + j] != -((i - 1) * width + j))
                             stable = false;
