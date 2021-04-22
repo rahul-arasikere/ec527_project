@@ -237,5 +237,15 @@ void border_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int
         }
         memcpy(_border, temp_border, width * height * sizeof(img_t));
     }
+    for (int i = 0; i < width; i++)
+    {
+        for (int j = 0; j < height; j++)
+        {
+            if (in[i * width + j] == PLATEAU)
+            {
+                _border[i * width + j] = -(i * width + j);
+            }
+        }
+    }
     *out = _border;
 }
