@@ -20,7 +20,7 @@ int main(int argc, char **argv);
 int main(int argc, char **argv)
 {
     int width, height, channels;
-    image_ptr_t data = stbi_load(argv[1], &width, &height, &channels, 0);
+    image_ptr_t data = stbi_load(argv[1], &width, &height, &channels, 1);
     img_ptr_t input = convert2float(data, width, height);
     stbi_image_free(data);
     img_ptr_t lowest_descent = NULL;
@@ -70,25 +70,23 @@ void lowest_descent_kernel(img_ptr_t in, img_ptr_t *out, int width, int height)
         for (int j = 1; j < width - 1; j++)
         {
             // find minimum in neighbors
-            img_t min = (img_t)INFINITY;
-            if (min < in[i * width + (j + 1)])
+            img_t min = INFINITY;
+            if (min > in[i * width + (j + 1)])
                 min = in[i * width + (j + 1)];
-            if (min < in[i * width + (j - 1)])
+            if (min > in[i * width + (j - 1)])
                 min = in[i * width + (j - 1)];
-            if (min < in[(i + 1) * width + j])
+            if (min > in[(i + 1) * width + j])
                 min = in[(i + 1) * width + j];
-            if (min < in[(i - 1) * width + j])
+            if (min > in[(i - 1) * width + j])
                 min = in[(i - 1) * width + j];
-            if (min < in[(i - 1) * width + (j + 1)])
+            if (min > in[(i - 1) * width + (j + 1)])
                 min = in[(i - 1) * width + (j + 1)];
-            if (min < in[(i - 1) * width + (j - 1)])
+            if (min > in[(i - 1) * width + (j - 1)])
                 min = in[(i - 1) * width + (j - 1)];
-            if (min < in[(i + 1) * width + (j + 1)])
+            if (min > in[(i + 1) * width + (j + 1)])
                 min = in[(i + 1) * width + (j + 1)];
-            if (min < in[(i + 1) * width + (j - 1)])
+            if (min > in[(i + 1) * width + (j - 1)])
                 min = in[(i + 1) * width + (j - 1)];
-            printf("min @%d,%d: %f\n", i, j, _lowest[i * width + j]);
-            
             // check if we have plateaued
             bool exists_q = false;
             img_t p = in[i * width + j];
@@ -145,13 +143,6 @@ void lowest_descent_kernel(img_ptr_t in, img_ptr_t *out, int width, int height)
             {
                 _lowest[i * width + j] = PLATEAU;
             }
-        }
-    }
-    for (int i = 0; i < width; i++)
-    {
-        for (int j = 0; j < height; j++)
-        {
-            printf("%d,%d: %f\n", i, j, _lowest[i * width + j]);
         }
     }
     *out = _lowest;
