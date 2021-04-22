@@ -20,6 +20,13 @@ int main(int argc, char **argv)
     image_ptr_t data = stbi_load(argv[1], &width, &height, &channels, 0);
     image_ptr_t lowest_descent = NULL;
     lowest_descent_kernel(data, &lowest_descent, width, height);
+    // for (int i = 0; i < width; i++)
+    // {
+    //     for (int j = 0; j < width; j++)
+    //     {
+    //         printf("%d, %d: %d\n", i, j, lowest_descent[i * width + j]);
+    //     }
+    // }
     stbi_write_png("result.png", width, height, channels, lowest_descent, width * channels);
     stbi_image_free(data);
     free(lowest_descent);
