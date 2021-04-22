@@ -102,7 +102,7 @@ void lowest_descent_kernel(image_ptr_t in, image_ptr_t *out, int width, int heig
             }
             if (p > in[(i + 1) * width + (j - 1)] && in[(i + 1) * width + (j - 1)] == min)
             {
-                _lowest[i * width + j] = -in[(i + 1) * width + (j - 1)];
+                _lowest[i * width + j] = in[(i + 1) * width + (j - 1)];
                 exists_q = true;
                 goto FOUND_LOWEST_DESCENT;
             }
