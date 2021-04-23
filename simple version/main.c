@@ -1,3 +1,8 @@
+// TODO: It should be i<height in first loop and then j<width in second loop
+// TODO: CPE calculation
+// TODO: Timing code
+
+
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,18 +31,19 @@ int main(int argc, char **argv)
     image_ptr_t data = stbi_load(argv[1], &width, &height, &channels, 1);
     img_ptr_t input = convert2data(data, width, height);
     stbi_image_free(data);
+    stbi_write_png("0_8_bit_img.png", width, height, channels, convert2image(input, width, height), width * channels);
     img_ptr_t lowest_descent = NULL;
     steepest_descent_kernel(input, &lowest_descent, width, height);
-    stbi_write_png("lowest descent result.png", width, height, channels, convert2image(lowest_descent, width, height), width * channels);
+    stbi_write_png("1_lowest_descent_result.png", width, height, channels, convert2image(lowest_descent, width, height), width * channels);
     img_ptr_t border = NULL;
     border_kernel(input, lowest_descent, &border, width, height);
-    stbi_write_png("border result.png", width, height, channels, convert2image(border, width, height), width * channels);
+    stbi_write_png("2_border_result.png", width, height, channels, convert2image(border, width, height), width * channels);
     img_ptr_t minima = NULL;
     minima_basin_kernel(input, border, &minima, width, height);
-    stbi_write_png("minima basin result.png", width, height, channels, convert2image(minima, width, height), width * channels);
+    stbi_write_png("3_minima_basin_result.png", width, height, channels, convert2image(minima, width, height), width * channels);
     img_ptr_t watershed = NULL;
     watershed_kernel(input, minima, &watershed, width, height);
-    stbi_write_png("watershed result.png", width, height, channels, convert2image(watershed, width, height), width * channels);
+    stbi_write_png("4_watershed_result.png", width, height, channels, convert2image(watershed, width, height), width * channels);
     free(watershed);
     free(lowest_descent);
     free(border);
@@ -56,14 +62,34 @@ img_ptr_t convert2data(image_ptr_t image, int width, int height)
     }
     return temp;
 }
+
+/* TODO: scale by minmax so image from [0-255] */
 image_ptr_t convert2image(img_ptr_t image, int width, int height)
 {
-    image_ptr_t temp = (image_ptr_t)calloc(width * height, sizeof(image_t));
-    for (int i = 0; i < width; i++)
+    // Step 1: find min and max values from the image
+    img_t max = 0, min = INT_MAX;
+    for (int i = 0; i < height; i++)
     {
-        for (int j = 0; j < height; j++)
+        for (int j = 0; j < width; j++)
         {
-            temp[i * width + j] = (image_t)image[i * width + j];
+            img_t current_pixel = image[i * width + j];
+            if(current_pixel<min) min = current_pixel;
+            if(current_pixel>max) max = current_pixel;
+        }    
+    }
+
+    // create a new image with the values scaled from [0-255]
+    image_ptr_t temp = (image_ptr_t)calloc(width * height, sizeof(image_t));
+    image_t max_min = max - min;
+    float_t scale = min / max_min;
+    for (int i = 0; i < height; i++)
+    {
+        for (int j = 0; j < width; j++)
+        {
+            // if(image[i * width + j] > 255 || image[i * width + j] <=0) {
+            //     printf("oops: %i\n", image[i * width + j]);
+            // }
+            temp[i * width + j] = (image_t)(((image[i * width + j] / max_min) - scale) * 255);
         }
     }
     return temp;

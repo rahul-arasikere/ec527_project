@@ -13,4 +13,4 @@ watershed: $(OBJS)
 	$(CC) $(CFLAGS) -o $@ -c $^ $(LD_LIBRARY)
 
 clean:
-	rm -rf $(PROGS) $(OBJS)
+	rm -rf $(PROGS) $(OBJS) *.png
