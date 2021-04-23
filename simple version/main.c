@@ -10,19 +10,21 @@
 #define PLATEAU 0
 
 typedef unsigned char image_t, *image_ptr_t;
-typedef float img_t, *img_ptr_t;
+typedef int img_t, *img_ptr_t;
 
-img_ptr_t convert2float(image_ptr_t image, int width, int height);
+img_ptr_t convert2data(image_ptr_t image, int width, int height);
 image_ptr_t convert2image(img_ptr_t image, int width, int height);
 void steepest_descent_kernel(img_ptr_t in, img_ptr_t *out, int width, int height);
 void border_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int height);
+void minima_basin_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int height);
+void watershed_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int height);
 int main(int argc, char **argv);
 
 int main(int argc, char **argv)
 {
     int width, height, channels;
     image_ptr_t data = stbi_load(argv[1], &width, &height, &channels, 1);
-    img_ptr_t input = convert2float(data, width, height);
+    img_ptr_t input = convert2data(data, width, height);
     stbi_image_free(data);
     img_ptr_t lowest_descent = NULL;
     steepest_descent_kernel(input, &lowest_descent, width, height);
@@ -30,12 +32,19 @@ int main(int argc, char **argv)
     img_ptr_t border = NULL;
     border_kernel(input, lowest_descent, &border, width, height);
     stbi_write_png("border result.png", width, height, channels, convert2image(border, width, height), width * channels);
+    img_ptr_t minima = NULL;
+    minima_basin_kernel(input, border, &minima, width, height);
+    stbi_write_png("minima basin result.png", width, height, channels, convert2image(minima, width, height), width * channels);
+    img_ptr_t watershed = NULL;
+    watershed_kernel(input, minima, &watershed, width, height);
+    stbi_write_png("watershed result.png", width, height, channels, convert2image(watershed, width, height), width * channels);
+    free(watershed);
     free(lowest_descent);
     free(border);
     return 0;
 }
 
-img_ptr_t convert2float(image_ptr_t image, int width, int height)
+img_ptr_t convert2data(image_ptr_t image, int width, int height)
 {
     img_ptr_t temp = (img_ptr_t)calloc(width * height, sizeof(img_t));
     for (int i = 0; i < width; i++)
@@ -70,10 +79,10 @@ void steepest_descent_kernel(img_ptr_t in, img_ptr_t *out, int width, int height
     }
     for (int i = 1; i < width - 1; i++)
     {
-        for (int j = 1; j < width - 1; j++)
+        for (int j = 1; j < height - 1; j++)
         {
             // find minimum in neighbors
-            img_t min = INFINITY;
+            img_t min = (img_t)INFINITY;
             if (min > in[i * width + (j + 1)])
                 min = in[i * width + (j + 1)];
             if (min > in[i * width + (j - 1)])
@@ -144,7 +153,7 @@ void steepest_descent_kernel(img_ptr_t in, img_ptr_t *out, int width, int height
         FOUND_LOWEST_DESCENT:
             if (!exists_q)
             {
-                _lowest[i * width + j] = PLATEAU;
+                _lowest[i * width + j] = (img_t)PLATEAU;
             }
         }
     }
@@ -174,7 +183,7 @@ void border_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int
         {
             for (int j = 1; j < height - 1; j++)
             {
-                if (in[i * width + j] == PLATEAU)
+                if (in[i * width + j] == (img_t)PLATEAU)
                 {
                     if (in[i * width + (j + 1)] < 0 && image[i * width + (j + 1)] == image[i * width + j])
                     {
@@ -241,11 +250,135 @@ void border_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int
     {
         for (int j = 0; j < height; j++)
         {
-            if (in[i * width + j] == PLATEAU)
+            if (in[i * width + j] == (img_t)PLATEAU)
             {
                 _border[i * width + j] = -(i * width + j);
             }
         }
     }
     *out = _border;
+}
+
+void minima_basin_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int height)
+{
+    img_ptr_t _minima = (img_ptr_t)calloc(width * height, sizeof(img_t));
+    if (_minima == NULL)
+    {
+        perror("Failed to allocate memory!\n");
+        exit(EXIT_FAILURE);
+    }
+    memcpy(_minima, in, height * width * sizeof(img_t));
+    bool stable = false;
+    while (!stable)
+    {
+        stable = true;
+        for (int i = 1; i < width - 1; i++)
+        {
+            for (int j = 1; j < height - 1; j++)
+            {
+                if (_minima[i * width + j] > (img_t)PLATEAU)
+                {
+                    img_t label = (img_t)INFINITY;
+                    if (_minima[i * width + (j + 1)] < label && image[i * width + (j + 1)] == image[i * width + j])
+                    {
+                        label = _minima[i * width + (j + 1)];
+                    }
+                    if (_minima[i * width + (j - 1)] < label && image[i * width + (j - 1)] == image[i * width + j])
+                    {
+                        label = _minima[i * width + (j - 1)];
+                    }
+                    if (_minima[(i + 1) * width + (j + 1)] < label && image[(i + 1) * width + (j + 1)] == image[i * width + j])
+                    {
+                        label = _minima[(i + 1) * width + (j + 1)];
+                    }
+                    if (_minima[(i + 1) * width + (j - 1)] < label && image[(i + 1) * width + (j - 1)] == image[i * width + j])
+                    {
+                        label = _minima[(i + 1) * width + (j - 1)];
+                    }
+                    if (_minima[(i - 1) * width + (j + 1)] < label && image[(i - 1) * width + (j + 1)] == image[i * width + j])
+                    {
+                        label = _minima[(i - 1) * width + (j + 1)];
+                    }
+                    if (_minima[(i - 1) * width + (j - 1)] < label && image[(i - 1) * width + (j - 1)] == image[i * width + j])
+                    {
+                        label = _minima[(i - 1) * width + (j - 1)];
+                    }
+                    if (_minima[(i + 1) * width + j] < label && image[(i + 1) * width + j] == image[i * width + j])
+                    {
+                        label = _minima[(i + 1) * width + j];
+                    }
+                    if (_minima[(i - 1) * width + j] < label && image[(i - 1) * width + j] == image[i * width + j])
+                    {
+                        label = _minima[(i - 1) * width + j];
+                    }
+                    if (label < _minima[i * width + j])
+                    {
+                        if (_minima[_minima[i * width + j]] != label)
+                        {
+                            stable = false;
+                        }
+                        _minima[_minima[i * width + j]] = label;
+                    }
+                }
+            }
+        }
+        for (int i = 1; i < width - 1; i++)
+        {
+            for (int j = 1; j < height - 1; j++)
+            {
+                if (_minima[i * width + j] > (img_t)PLATEAU)
+                {
+                    img_t label = _minima[i * width + j];
+                    img_t ref = (img_t)INFINITY;
+                    while (label != ref)
+                    {
+                        ref = label;
+                        label = _minima[ref];
+                    }
+                    if (label != ref)
+                    {
+                        stable = false;
+                    }
+                    _minima[i * width + j] = label;
+                }
+            }
+        }
+    }
+    *out = _minima;
+}
+
+void watershed_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int height)
+{
+    img_ptr_t _watershed = (img_ptr_t)calloc(height * width, sizeof(img_t));
+    if (_watershed == NULL)
+    {
+        perror("Failed to allocate memory!\n");
+        exit(EXIT_FAILURE);
+    }
+    memcpy(_watershed, in, height * width * sizeof(img_t));
+    for (int i = 0; i < width; i++)
+    {
+        for (int j = 0; j < height; j++)
+        {
+            _watershed[i * width + j] = abs(_watershed[i * width + j]);
+        }
+    }
+    for (int i = 1; i < width - 1; i++)
+    {
+        for (int j = 1; j < height - 1; j++)
+        {
+            img_t label = _watershed[i * width + j];
+            if (label != (i * width + j))
+            {
+                img_t ref = (img_t)INFINITY;
+                while (ref != label)
+                {
+                    ref = label;
+                    label = _watershed[ref];
+                }
+                _watershed[i * width + j] = label;
+            }
+        }
+    }
+    *out = _watershed;
 }
