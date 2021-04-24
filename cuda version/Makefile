@@ -2,7 +2,7 @@ NVCC := nvcc
 CFLAGS := -Wall -g
 PROGS = watershed
 OBJS = main.o
-LD_LIBRARY = -lm
+LD_LIBRARY :=
 
 all: $(PROGS)
 
