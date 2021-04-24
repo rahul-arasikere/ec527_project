@@ -1,7 +1,6 @@
-// TODO: It should be i<height in first loop and then j<width in second loop
+// TODO: It should be i<height in first loop and then j<width in second loop - DONE @rahulav
 // TODO: CPE calculation
 // TODO: Timing code
-
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -68,23 +67,25 @@ image_ptr_t convert2image(img_ptr_t image, int width, int height)
 {
     // Step 1: find min and max values from the image
     img_t max = 0, min = INT_MAX;
-    for (int i = 0; i < height; i++)
+    for (int i = 0; i < width; i++)
     {
-        for (int j = 0; j < width; j++)
+        for (int j = 0; j < height; j++)
         {
             img_t current_pixel = image[i * width + j];
-            if(current_pixel<min) min = current_pixel;
-            if(current_pixel>max) max = current_pixel;
-        }    
+            if (current_pixel < min)
+                min = current_pixel;
+            if (current_pixel > max)
+                max = current_pixel;
+        }
     }
 
     // create a new image with the values scaled from [0-255]
     image_ptr_t temp = (image_ptr_t)calloc(width * height, sizeof(image_t));
     image_t max_min = max - min;
     float_t scale = min / max_min;
-    for (int i = 0; i < height; i++)
+    for (int i = 0; i < width; i++)
     {
-        for (int j = 0; j < width; j++)
+        for (int j = 0; j < height; j++)
         {
             // if(image[i * width + j] > 255 || image[i * width + j] <=0) {
             //     printf("oops: %i\n", image[i * width + j]);
@@ -103,9 +104,9 @@ void steepest_descent_kernel(img_ptr_t in, img_ptr_t *out, int width, int height
         perror("Failed to allocate memory!\n");
         exit(EXIT_FAILURE);
     }
-    for (int i = 1; i < width - 1; i++)
+    for (int i = 1; i < height - 1; i++)
     {
-        for (int j = 1; j < height - 1; j++)
+        for (int j = 1; j < width - 1; j++)
         {
             // find minimum in neighbors
             img_t min = (img_t)INFINITY;
@@ -205,9 +206,9 @@ void border_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int
     {
         stable = true;
         memcpy(temp_border, _border, width * height * sizeof(img_t));
-        for (int i = 1; i < width - 1; i++)
+        for (int i = 1; i < height - 1; i++)
         {
-            for (int j = 1; j < height - 1; j++)
+            for (int j = 1; j < width - 1; j++)
             {
                 if (in[i * width + j] == (img_t)PLATEAU)
                 {
@@ -298,9 +299,9 @@ void minima_basin_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int widt
     while (!stable)
     {
         stable = true;
-        for (int i = 1; i < width - 1; i++)
+        for (int i = 1; i < height - 1; i++)
         {
-            for (int j = 1; j < height - 1; j++)
+            for (int j = 1; j < width - 1; j++)
             {
                 if (_minima[i * width + j] > (img_t)PLATEAU)
                 {
@@ -348,9 +349,9 @@ void minima_basin_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int widt
                 }
             }
         }
-        for (int i = 1; i < width - 1; i++)
+        for (int i = 1; i < height - 1; i++)
         {
-            for (int j = 1; j < height - 1; j++)
+            for (int j = 1; j < width - 1; j++)
             {
                 if (_minima[i * width + j] > (img_t)PLATEAU)
                 {
@@ -389,9 +390,9 @@ void watershed_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, 
             _watershed[i * width + j] = abs(_watershed[i * width + j]);
         }
     }
-    for (int i = 1; i < width - 1; i++)
+    for (int i = 1; i < height - 1; i++)
     {
-        for (int j = 1; j < height - 1; j++)
+        for (int j = 1; j < width - 1; j++)
         {
             img_t label = _watershed[i * width + j];
             if (label != (i * width + j))
