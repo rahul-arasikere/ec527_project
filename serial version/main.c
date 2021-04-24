@@ -83,6 +83,8 @@ image_ptr_t convert2image(img_ptr_t image, int width, int height)
         }
     }
 
+    if (min == 0)
+        min = 1;
     // create a new image with the values scaled from [0-255]
     image_ptr_t temp = (image_ptr_t)calloc(width * height, sizeof(image_t));
     image_t max_min = max - min;
