@@ -53,9 +53,9 @@ int main(int argc, char **argv)
 img_ptr_t convert2data(image_ptr_t image, int width, int height)
 {
     img_ptr_t temp = (img_ptr_t)calloc(width * height, sizeof(img_t));
-    for (int i = 0; i < width; i++)
+    for (int i = 0; i < height; i++)
     {
-        for (int j = 0; j < height; j++)
+        for (int j = 0; j < width; j++)
         {
             temp[i * width + j] = (img_t)image[i * width + j];
         }
@@ -68,9 +68,9 @@ image_ptr_t convert2image(img_ptr_t image, int width, int height)
 {
     // Step 1: find min and max values from the image
     img_t max = 0, min = INT_MAX;
-    for (int i = 0; i < width; i++)
+    for (int i = 0; i < height; i++)
     {
-        for (int j = 0; j < height; j++)
+        for (int j = 0; j < width; j++)
         {
             img_t current_pixel = image[i * width + j];
             if (current_pixel < min)
@@ -84,9 +84,9 @@ image_ptr_t convert2image(img_ptr_t image, int width, int height)
     image_ptr_t temp = (image_ptr_t)calloc(width * height, sizeof(image_t));
     image_t max_min = max - min;
     float_t scale = min / max_min;
-    for (int i = 0; i < width; i++)
+    for (int i = 0; i < height; i++)
     {
-        for (int j = 0; j < height; j++)
+        for (int j = 0; j < width; j++)
         {
             // if(image[i * width + j] > 255 || image[i * width + j] <=0) {
             //     printf("oops: %i\n", image[i * width + j]);
@@ -274,9 +274,9 @@ void border_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int
         }
         memcpy(_border, temp_border, width * height * sizeof(img_t));
     }
-    for (int i = 0; i < width; i++)
+    for (int i = 0; i < height; i++)
     {
-        for (int j = 0; j < height; j++)
+        for (int j = 0; j < width; j++)
         {
             if (in[i * width + j] == (img_t)PLATEAU)
             {
@@ -384,9 +384,9 @@ void watershed_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, 
         exit(EXIT_FAILURE);
     }
     memcpy(_watershed, in, height * width * sizeof(img_t));
-    for (int i = 0; i < width; i++)
+    for (int i = 0; i < height; i++)
     {
-        for (int j = 0; j < height; j++)
+        for (int j = 0; j < width; j++)
         {
             _watershed[i * width + j] = abs(_watershed[i * width + j]);
         }
