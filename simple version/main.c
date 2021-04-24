@@ -46,6 +46,7 @@ int main(int argc, char **argv)
     free(watershed);
     free(lowest_descent);
     free(border);
+    free(input);
     return 0;
 }
 
