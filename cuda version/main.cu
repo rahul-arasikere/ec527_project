@@ -12,16 +12,23 @@
 #include "stb_image_write.h"
 
 #define PLATEAU 0
+#define BLOCK_SIZE 16
+
+// Assertion to check for errors
+#define CUDA_SAFE_CALL(ans)                           \
+    {                                                 \
+        gpuAssert((ans), (char *)__FILE__, __LINE__); \
+    }
 
 typedef unsigned char image_t, *image_ptr_t;
 typedef int img_t, *img_ptr_t;
 
 img_ptr_t convert2data(image_ptr_t image, int width, int height);
 image_ptr_t convert2image(img_ptr_t image, int width, int height);
-void steepest_descent_kernel(img_ptr_t in, img_ptr_t *out, int width, int height);
-void border_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int height);
-void minima_basin_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int height);
-void watershed_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int height);
+__global__ void steepest_descent_kernel(img_ptr_t in, img_ptr_t *out, int width, int height);
+__global__ void border_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int height);
+__global__ void minima_basin_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int height);
+__global__ void watershed_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int height);
 int main(int argc, char **argv);
 
 int main(int argc, char **argv)
@@ -97,7 +104,7 @@ image_ptr_t convert2image(img_ptr_t image, int width, int height)
     return temp;
 }
 
-void steepest_descent_kernel(img_ptr_t in, img_ptr_t *out, int width, int height)
+__global__ void steepest_descent_kernel(img_ptr_t in, img_ptr_t *out, int width, int height)
 {
     img_ptr_t _lowest = (img_ptr_t)calloc(width * height, sizeof(img_t));
     if (_lowest == NULL)
@@ -188,7 +195,7 @@ void steepest_descent_kernel(img_ptr_t in, img_ptr_t *out, int width, int height
     *out = _lowest;
 }
 
-void border_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int height)
+__global__ void border_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int height)
 {
     img_ptr_t _border = (img_ptr_t)calloc(width * height, sizeof(img_t));
     if (in == NULL)
@@ -287,7 +294,7 @@ void border_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int
     *out = _border;
 }
 
-void minima_basin_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int height)
+__global__ void minima_basin_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int height)
 {
     img_ptr_t _minima = (img_ptr_t)calloc(width * height, sizeof(img_t));
     if (_minima == NULL)
@@ -375,7 +382,7 @@ void minima_basin_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int widt
     *out = _minima;
 }
 
-void watershed_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int height)
+__global__ void watershed_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int height)
 {
     img_ptr_t _watershed = (img_ptr_t)calloc(height * width, sizeof(img_t));
     if (_watershed == NULL)

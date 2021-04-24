@@ -13,6 +13,9 @@
 
 #define PLATEAU 0
 
+const int neighbour_x[8] = {-1, 0, 1, 1, 1, 0, -1, -1};
+const int neighbour_y[8] = {-1, -1, -1, 0, 1, 1, 1, 0};
+
 typedef unsigned char image_t, *image_ptr_t;
 typedef int img_t, *img_ptr_t;
 
@@ -111,74 +114,26 @@ void steepest_descent_kernel(img_ptr_t in, img_ptr_t *out, int width, int height
         {
             // find minimum in neighbors
             img_t min = (img_t)INFINITY;
-            if (min > in[i * width + (j + 1)])
-                min = in[i * width + (j + 1)];
-            if (min > in[i * width + (j - 1)])
-                min = in[i * width + (j - 1)];
-            if (min > in[(i + 1) * width + j])
-                min = in[(i + 1) * width + j];
-            if (min > in[(i - 1) * width + j])
-                min = in[(i - 1) * width + j];
-            if (min > in[(i - 1) * width + (j + 1)])
-                min = in[(i - 1) * width + (j + 1)];
-            if (min > in[(i - 1) * width + (j - 1)])
-                min = in[(i - 1) * width + (j - 1)];
-            if (min > in[(i + 1) * width + (j + 1)])
-                min = in[(i + 1) * width + (j + 1)];
-            if (min > in[(i + 1) * width + (j - 1)])
-                min = in[(i + 1) * width + (j - 1)];
+            for (int k = 0; k < 8; k++)
+            {
+                if (min > in[(i + neighbour_x[k]) * width + (j + neighbour_y[k])])
+                {
+                    min = in[(i + neighbour_x[k]) * width + (j + neighbour_y[k])];
+                }
+            }
             // check if we have plateaued
             bool exists_q = false;
             img_t p = in[i * width + j];
-            if (p > in[i * width + (j + 1)] && in[i * width + (j + 1)] == min)
+            for (int k = 0; k < 8; k++)
             {
-                _lowest[i * width + j] = -(i * width + (j + 1));
-                exists_q = true;
-                goto FOUND_LOWEST_DESCENT;
+                img_t q = in[(i + neighbour_x[k]) * width + (j + neighbour_y[k])];
+                if (p > q && q == min)
+                {
+                    _lowest[i * width + j] = -q;
+                    exists_q = true;
+                    break;
+                }
             }
-            if (p > in[i * width + (j - 1)] && in[i * width + (j - 1)] == min)
-            {
-                _lowest[i * width + j] = -(i * width + (j - 1));
-                exists_q = true;
-                goto FOUND_LOWEST_DESCENT;
-            }
-            if (p > in[(i + 1) * width + j] && in[(i + 1) * width + j] == min)
-            {
-                _lowest[i * width + j] = -((i - 1) * width + j);
-                exists_q = true;
-                goto FOUND_LOWEST_DESCENT;
-            }
-            if (p > in[(i - 1) * width + j] && in[(i - 1) * width + j] == min)
-            {
-                _lowest[i * width + j] = -((i - 1) * width + j);
-                exists_q = true;
-                goto FOUND_LOWEST_DESCENT;
-            }
-            if (p > in[(i - 1) * width + (j + 1)] && in[(i - 1) * width + (j + 1)] == min)
-            {
-                _lowest[i * width + j] = -((i - 1) * width + (j + 1));
-                exists_q = true;
-                goto FOUND_LOWEST_DESCENT;
-            }
-            if (p > in[(i - 1) * width + (j - 1)] && in[(i - 1) * width + (j - 1)] == min)
-            {
-                _lowest[i * width + j] = -((i - 1) * width + (j - 1));
-                exists_q = true;
-                goto FOUND_LOWEST_DESCENT;
-            }
-            if (p > in[(i + 1) * width + (j + 1)] && in[(i + 1) * width + (j + 1)] == min)
-            {
-                _lowest[i * width + j] = -((i + 1) * width + (j + 1));
-                exists_q = true;
-                goto FOUND_LOWEST_DESCENT;
-            }
-            if (p > in[(i + 1) * width + (j - 1)] && in[(i + 1) * width + (j - 1)] == min)
-            {
-                _lowest[i * width + j] = -((i + 1) * width + (j - 1));
-                exists_q = true;
-                goto FOUND_LOWEST_DESCENT;
-            }
-        FOUND_LOWEST_DESCENT:
             if (!exists_q)
             {
                 _lowest[i * width + j] = (img_t)PLATEAU;

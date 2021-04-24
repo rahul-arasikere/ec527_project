@@ -1,5 +1,9 @@
 {
     "files.associations": {
-        "vector": "cpp"
+        "*.S": "asm-intel-x86-generic",
+        "vector": "cpp",
+        "stdlib.h": "c",
+        "math.h": "c",
+        "*.cu": "c"
     }
 }
