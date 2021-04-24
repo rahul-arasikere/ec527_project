@@ -168,67 +168,26 @@ void border_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int
         {
             for (int j = 1; j < width - 1; j++)
             {
-                if (in[i * width + j] == (img_t)PLATEAU)
+                int p = i * width + j;
+                if (in[p] == (img_t)PLATEAU)
                 {
-                    if (in[i * width + (j + 1)] < 0 && image[i * width + (j + 1)] == image[i * width + j])
+                    for (int k = 0; k < 8; k++)
                     {
-                        if (temp_border[i * width + j] != -(i * width + (j + 1)))
-                            stable = false;
-                        temp_border[i * width + j] = -(i * width + (j + 1));
-                        break;
-                    }
-                    if (in[i * width + (j - 1)] < 0 && image[i * width + (j - 1)] == image[i * width + j])
-                    {
-                        if (temp_border[i * width + j] != -(i * width + (j - 1)))
-                            stable = false;
-                        temp_border[i * width + j] = -(i * width + (j - 1));
-                        break;
-                    }
-                    if (in[(i + 1) * width + (j + 1)] < 0 && image[(i + 1) * width + (j + 1)] == image[i * width + j])
-                    {
-                        if (temp_border[i * width + j] != -((i + 1) * width + (j + 1)))
-                            stable = false;
-                        temp_border[i * width + j] = -((i + 1) * width + (j + 1));
-                        break;
-                    }
-                    if (in[(i + 1) * width + (j - 1)] < 0 && image[(i + 1) * width + (j - 1)] == image[i * width + j])
-                    {
-                        if (temp_border[i * width + j] != -((i + 1) * width + (j - 1)))
-                            stable = false;
-                        temp_border[i * width + j] = -((i + 1) * width + (j - 1));
-                        break;
-                    }
-                    if (in[(i - 1) * width + (j + 1)] < 0 && image[(i - 1) * width + (j + 1)] == image[i * width + j])
-                    {
-                        if (temp_border[i * width + j] != -((i - 1) * width + (j + 1)))
-                            stable = false;
-                        temp_border[i * width + j] = -((i - 1) * width + (j + 1));
-                        break;
-                    }
-                    if (in[(i - 1) * width + (j - 1)] < 0 && image[(i - 1) * width + (j - 1)] == image[i * width + j])
-                    {
-                        if (temp_border[i * width + j] != -((i - 1) * width + (j - 1)))
-                            stable = false;
-                        temp_border[i * width + j] = -((i - 1) * width + (j - 1));
-                        break;
-                    }
-                    if (in[(i + 1) * width + j] < 0 && image[(i + 1) * width + j] == image[i * width + j])
-                    {
-                        if (temp_border[i * width + j] != -((i + 1) * width + j))
-                            stable = false;
-                        temp_border[i * width + j] = -((i + 1) * width + j);
-                        break;
-                    }
-                    if (in[(i - 1) * width + j] < 0 && image[(i - 1) * width + j] == image[i * width + j])
-                    {
-                        if (temp_border[i * width + j] != -((i - 1) * width + j))
-                            stable = false;
-                        temp_border[i * width + j] = -((i - 1) * width + j);
-                        break;
+                        int q = ((i + neighbour_x[k]) * width + (j + neighbour_y[k]));
+                        if (in[q] < 0 && image[q] == image[p])
+                        {
+                            if (temp_border[p] != -(q))
+                                stable = false;
+                            temp_border[p] = -(q);
+                            goto _kernel_exit_goto;
+                        }
                     }
                 }
             }
+        _kernel_exit_goto:
+            continue;
         }
+
         memcpy(_border, temp_border, width * height * sizeof(img_t));
     }
     for (int i = 0; i < height; i++)
