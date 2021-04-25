@@ -6,12 +6,36 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-
+#include <math.h>
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
+#include <time.h>
 
+double interval(struct timespec start, struct timespec end)
+{
+  struct timespec temp;
+  temp.tv_sec = end.tv_sec - start.tv_sec;
+  temp.tv_nsec = end.tv_nsec - start.tv_nsec;
+  if (temp.tv_nsec < 0) {
+    temp.tv_sec = temp.tv_sec - 1;
+    temp.tv_nsec = temp.tv_nsec + 1000000000;
+  }
+  return (((double)temp.tv_sec) + ((double)temp.tv_nsec)*1.0e-9);
+}
+/*
+     This method does not require adjusting a #define constant
+
+  How to use this method:
+
+      struct timespec time_start, time_stop;
+      clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &time_start);
+      // DO SOMETHING THAT TAKES TIME
+      clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &time_stop);
+      measurement = interval(time_start, time_stop);
+
+ */
 #define PLATEAU 0
 
 typedef unsigned char image_t, *image_ptr_t;
@@ -31,7 +55,6 @@ int main(int argc, char **argv)
     image_ptr_t data = stbi_load(argv[1], &width, &height, &channels, 1);
     img_ptr_t input = convert2data(data, width, height);
     stbi_image_free(data);
-    stbi_write_png("0_8_bit_img.png", width, height, channels, convert2image(input, width, height), width * channels);
     img_ptr_t lowest_descent = NULL;
     steepest_descent_kernel(input, &lowest_descent, width, height);
     stbi_write_png("1_lowest_descent_result.png", width, height, channels, convert2image(lowest_descent, width, height), width * channels);
@@ -63,11 +86,10 @@ img_ptr_t convert2data(image_ptr_t image, int width, int height)
     return temp;
 }
 
-/* TODO: scale by minmax so image from [0-255] */
 image_ptr_t convert2image(img_ptr_t image, int width, int height)
 {
     // Step 1: find min and max values from the image
-    img_t max = 0, min = INT_MAX;
+    img_t max = INT_MIN, min = INT_MAX;
     for (int i = 0; i < height; i++)
     {
         for (int j = 0; j < width; j++)
@@ -78,20 +100,22 @@ image_ptr_t convert2image(img_ptr_t image, int width, int height)
         }    
     }
 
+    printf("min: %i\n", min);
+    printf("max: %i\n", max);
+
     // create a new image with the values scaled from [0-255]
     image_ptr_t temp = (image_ptr_t)calloc(width * height, sizeof(image_t));
-    image_t max_min = max - min;
-    float_t scale = min / max_min;
+    float max_min = max-min;
     for (int i = 0; i < height; i++)
     {
         for (int j = 0; j < width; j++)
         {
-            // if(image[i * width + j] > 255 || image[i * width + j] <=0) {
-            //     printf("oops: %i\n", image[i * width + j]);
-            // }
-            temp[i * width + j] = (image_t)(((image[i * width + j] / max_min) - scale) * 255);
+            img_t pix_val = image[i * width + j];
+            float val = (pix_val - min) / (max_min);
+            temp[i * width + j] = (image_t)(val * 255);
         }
     }
+    
     return temp;
 }
 
