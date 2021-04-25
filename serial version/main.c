@@ -33,7 +33,6 @@ int main(int argc, char **argv)
     image_ptr_t data = stbi_load(argv[1], &width, &height, &channels, 1);
     img_ptr_t input = convert2data(data, width, height);
     stbi_image_free(data);
-    stbi_write_png("0_8_bit_img.png", width, height, channels, convert2image(input, width, height), width * channels);
     img_ptr_t lowest_descent = NULL;
     steepest_descent_kernel(input, &lowest_descent, width, height);
     stbi_write_png("1_lowest_descent_result.png", width, height, channels, convert2image(lowest_descent, width, height), width * channels);
@@ -66,13 +65,11 @@ img_ptr_t convert2data(image_ptr_t image, int width, int height)
     return temp;
 }
 
-/* TODO: scale by minmax so image from [0-255] */
 image_ptr_t convert2image(img_ptr_t image, int width, int height)
 {
     // Step 1: find min and max values from the image
-    img_t max = 0, min = INT_MAX;
+    img_t max = INT_MIN, min = INT_MAX;
     for (int i = 0; i < height; i++)
-    {
         for (int j = 0; j < width; j++)
         {
             img_t current_pixel = image[i * width + j];
@@ -80,23 +77,18 @@ image_ptr_t convert2image(img_ptr_t image, int width, int height)
                 min = current_pixel;
             if (current_pixel > max)
                 max = current_pixel;
-        }
-    }
-
-    if (min == 0)
-        min = 1;
-    // create a new image with the values scaled from [0-255]
+        }   
+    
+    // Step 2: create a new image with the values scaled from [0-255]
     image_ptr_t temp = (image_ptr_t)calloc(width * height, sizeof(image_t));
-    image_t max_min = max - min;
-    float_t scale = min / max_min;
+    float max_min = max - min;
     for (int i = 0; i < height; i++)
     {
         for (int j = 0; j < width; j++)
         {
-            // if(image[i * width + j] > 255 || image[i * width + j] <=0) {
-            //     printf("oops: %i\n", image[i * width + j]);
-            // }
-            temp[i * width + j] = (image_t)(((image[i * width + j] / max_min) - scale) * 255);
+            img_t pix_val = image[i * width + j];
+            float val = (pix_val - min) / max_min;
+            temp[i * width + j] = (image_t)(val * 255);
         }
     }
     return temp;
