@@ -240,37 +240,13 @@ void minima_basin_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int widt
                 if (_minima[i * width + j] > (img_t)PLATEAU)
                 {
                     img_t label = (img_t)INFINITY;
-                    if (_minima[i * width + (j + 1)] < label && image[i * width + (j + 1)] == image[i * width + j])
+                    for (int k = 0; k < 8; k++)
                     {
-                        label = _minima[i * width + (j + 1)];
-                    }
-                    if (_minima[i * width + (j - 1)] < label && image[i * width + (j - 1)] == image[i * width + j])
-                    {
-                        label = _minima[i * width + (j - 1)];
-                    }
-                    if (_minima[(i + 1) * width + (j + 1)] < label && image[(i + 1) * width + (j + 1)] == image[i * width + j])
-                    {
-                        label = _minima[(i + 1) * width + (j + 1)];
-                    }
-                    if (_minima[(i + 1) * width + (j - 1)] < label && image[(i + 1) * width + (j - 1)] == image[i * width + j])
-                    {
-                        label = _minima[(i + 1) * width + (j - 1)];
-                    }
-                    if (_minima[(i - 1) * width + (j + 1)] < label && image[(i - 1) * width + (j + 1)] == image[i * width + j])
-                    {
-                        label = _minima[(i - 1) * width + (j + 1)];
-                    }
-                    if (_minima[(i - 1) * width + (j - 1)] < label && image[(i - 1) * width + (j - 1)] == image[i * width + j])
-                    {
-                        label = _minima[(i - 1) * width + (j - 1)];
-                    }
-                    if (_minima[(i + 1) * width + j] < label && image[(i + 1) * width + j] == image[i * width + j])
-                    {
-                        label = _minima[(i + 1) * width + j];
-                    }
-                    if (_minima[(i - 1) * width + j] < label && image[(i - 1) * width + j] == image[i * width + j])
-                    {
-                        label = _minima[(i - 1) * width + j];
+                        int q = (i + neighbour_x[k]) * width + (j + neighbour_y[k]);
+                        if (_minima[q] < label && image[q] == image[i * width + j])
+                        {
+                            label = _minima[q];
+                        }
                     }
                     if (label < _minima[i * width + j])
                     {
