@@ -1,7 +1,6 @@
-// TODO: It should be i<height in first loop and then j<width in second loop
+// TODO: It should be i<height in first loop and then j<width in second loop - DONE @rahulav
 // TODO: CPE calculation
 // TODO: Timing code
-
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -70,15 +69,16 @@ int main(int argc, char **argv)
     free(watershed);
     free(lowest_descent);
     free(border);
+    free(input);
     return 0;
 }
 
 img_ptr_t convert2data(image_ptr_t image, int width, int height)
 {
     img_ptr_t temp = (img_ptr_t)calloc(width * height, sizeof(img_t));
-    for (int i = 0; i < width; i++)
+    for (int i = 0; i < height; i++)
     {
-        for (int j = 0; j < height; j++)
+        for (int j = 0; j < width; j++)
         {
             temp[i * width + j] = (img_t)image[i * width + j];
         }
@@ -95,9 +95,11 @@ image_ptr_t convert2image(img_ptr_t image, int width, int height)
         for (int j = 0; j < width; j++)
         {
             img_t current_pixel = image[i * width + j];
-            if(current_pixel<min) min = current_pixel;
-            if(current_pixel>max) max = current_pixel;
-        }    
+            if (current_pixel < min)
+                min = current_pixel;
+            if (current_pixel > max)
+                max = current_pixel;
+        }
     }
 
     printf("min: %i\n", min);
@@ -127,9 +129,9 @@ void steepest_descent_kernel(img_ptr_t in, img_ptr_t *out, int width, int height
         perror("Failed to allocate memory!\n");
         exit(EXIT_FAILURE);
     }
-    for (int i = 1; i < width - 1; i++)
+    for (int i = 1; i < height - 1; i++)
     {
-        for (int j = 1; j < height - 1; j++)
+        for (int j = 1; j < width - 1; j++)
         {
             // find minimum in neighbors
             img_t min = (img_t)INFINITY;
@@ -229,9 +231,9 @@ void border_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int
     {
         stable = true;
         memcpy(temp_border, _border, width * height * sizeof(img_t));
-        for (int i = 1; i < width - 1; i++)
+        for (int i = 1; i < height - 1; i++)
         {
-            for (int j = 1; j < height - 1; j++)
+            for (int j = 1; j < width - 1; j++)
             {
                 if (in[i * width + j] == (img_t)PLATEAU)
                 {
@@ -296,9 +298,9 @@ void border_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int
         }
         memcpy(_border, temp_border, width * height * sizeof(img_t));
     }
-    for (int i = 0; i < width; i++)
+    for (int i = 0; i < height; i++)
     {
-        for (int j = 0; j < height; j++)
+        for (int j = 0; j < width; j++)
         {
             if (in[i * width + j] == (img_t)PLATEAU)
             {
@@ -322,9 +324,9 @@ void minima_basin_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int widt
     while (!stable)
     {
         stable = true;
-        for (int i = 1; i < width - 1; i++)
+        for (int i = 1; i < height - 1; i++)
         {
-            for (int j = 1; j < height - 1; j++)
+            for (int j = 1; j < width - 1; j++)
             {
                 if (_minima[i * width + j] > (img_t)PLATEAU)
                 {
@@ -372,9 +374,9 @@ void minima_basin_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int widt
                 }
             }
         }
-        for (int i = 1; i < width - 1; i++)
+        for (int i = 1; i < height - 1; i++)
         {
-            for (int j = 1; j < height - 1; j++)
+            for (int j = 1; j < width - 1; j++)
             {
                 if (_minima[i * width + j] > (img_t)PLATEAU)
                 {
@@ -406,16 +408,16 @@ void watershed_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, 
         exit(EXIT_FAILURE);
     }
     memcpy(_watershed, in, height * width * sizeof(img_t));
-    for (int i = 0; i < width; i++)
+    for (int i = 0; i < height; i++)
     {
-        for (int j = 0; j < height; j++)
+        for (int j = 0; j < width; j++)
         {
             _watershed[i * width + j] = abs(_watershed[i * width + j]);
         }
     }
-    for (int i = 1; i < width - 1; i++)
+    for (int i = 1; i < height - 1; i++)
     {
-        for (int j = 1; j < height - 1; j++)
+        for (int j = 1; j < width - 1; j++)
         {
             img_t label = _watershed[i * width + j];
             if (label != (i * width + j))

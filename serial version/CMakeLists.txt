@@ -1,6 +1,0 @@
-cmake_minimum_required(VERSION 2.8)
-project( SerialVersion )
-find_package( OpenCV REQUIRED )
-include_directories( ${OpenCV_INCLUDE_DIRS} )
-add_executable( SerialVersion main.cpp )
-target_link_libraries( SerialVersion ${OpenCV_LIBS} )
