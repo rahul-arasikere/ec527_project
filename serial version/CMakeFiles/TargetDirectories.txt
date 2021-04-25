@@ -1,3 +1,0 @@
-/home/builder/Projects/ec527_project/serial version/CMakeFiles/rebuild_cache.dir
-/home/builder/Projects/ec527_project/serial version/CMakeFiles/edit_cache.dir
-/home/builder/Projects/ec527_project/serial version/CMakeFiles/SerialVersion.dir
