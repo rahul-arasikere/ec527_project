@@ -34,8 +34,8 @@ int main(int argc, char **argv)
     img_ptr_t lowest_descent = NULL;
     img_ptr_t border = NULL;
     img_ptr_t minima = NULL;
-    struct timespec time_start, time_stop;
     img_ptr_t watershed = NULL;
+    struct timespec time_start, time_stop;
     clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &time_start); // start timer
     steepest_descent_kernel(input, &lowest_descent, width, height);
     border_kernel(input, lowest_descent, &border, width, height);
