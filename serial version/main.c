@@ -1,5 +1,3 @@
-// TODO: It should be i<height in first loop and then j<width in second loop - DONE @rahulav
-// TODO: CPE calculation
 // TODO: Timing code
 
 #include <stdbool.h>
@@ -25,6 +23,7 @@ void steepest_descent_kernel(img_ptr_t in, img_ptr_t *out, int width, int height
 void border_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int height);
 void minima_basin_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int height);
 void watershed_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int height);
+double interval(struct timespec start, struct timespec end);
 int main(int argc, char **argv);
 
 int main(int argc, char **argv)
@@ -52,6 +51,29 @@ int main(int argc, char **argv)
     return 0;
 }
 
+double interval(struct timespec start, struct timespec end)
+{
+    /*
+    This method does not require adjusting a #define constant
+
+    How to use this method:
+
+        struct timespec time_start, time_stop;
+        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &time_start);
+        // DO SOMETHING THAT TAKES TIME
+        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &time_stop);
+        measurement = interval(time_start, time_stop);*/
+    struct timespec temp;
+    temp.tv_sec = end.tv_sec - start.tv_sec;
+    temp.tv_nsec = end.tv_nsec - start.tv_nsec;
+    if (temp.tv_nsec < 0)
+    {
+        temp.tv_sec = temp.tv_sec - 1;
+        temp.tv_nsec = temp.tv_nsec + 1000000000;
+    }
+    return (((double)temp.tv_sec) + ((double)temp.tv_nsec) * 1.0e-9);
+}
+
 img_ptr_t convert2data(image_ptr_t image, int width, int height)
 {
     img_ptr_t temp = (img_ptr_t)calloc(width * height, sizeof(img_t));
@@ -77,8 +99,8 @@ image_ptr_t convert2image(img_ptr_t image, int width, int height)
                 min = current_pixel;
             if (current_pixel > max)
                 max = current_pixel;
-        }   
-    
+        }
+
     // Step 2: create a new image with the values scaled from [0-255]
     image_ptr_t temp = (image_ptr_t)calloc(width * height, sizeof(image_t));
     float max_min = max - min;
