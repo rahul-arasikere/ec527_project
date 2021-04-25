@@ -32,21 +32,21 @@ int main(int argc, char **argv)
     img_ptr_t input = convert2data(data, width, height);
     stbi_image_free(data);
     img_ptr_t lowest_descent = NULL;
+    img_ptr_t border = NULL;
+    img_ptr_t minima = NULL;
     struct timespec time_start, time_stop;
+    img_ptr_t watershed = NULL;
     clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &time_start); // start timer
     steepest_descent_kernel(input, &lowest_descent, width, height);
-    stbi_write_png("1_lowest_descent_result.png", width, height, channels, convert2image(lowest_descent, width, height), width * channels);
-    img_ptr_t border = NULL;
     border_kernel(input, lowest_descent, &border, width, height);
-    stbi_write_png("2_border_result.png", width, height, channels, convert2image(border, width, height), width * channels);
-    img_ptr_t minima = NULL;
     minima_basin_kernel(input, border, &minima, width, height);
-    stbi_write_png("3_minima_basin_result.png", width, height, channels, convert2image(minima, width, height), width * channels);
-    img_ptr_t watershed = NULL;
     watershed_kernel(input, minima, &watershed, width, height);
-    stbi_write_png("4_watershed_result.png", width, height, channels, convert2image(watershed, width, height), width * channels);
     clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &time_stop);
     printf("Process took %f seconds\n", interval(time_start, time_stop));
+    stbi_write_png("1_lowest_descent_result.png", width, height, channels, convert2image(lowest_descent, width, height), width * channels);
+    stbi_write_png("2_border_result.png", width, height, channels, convert2image(border, width, height), width * channels);
+    stbi_write_png("3_minima_basin_result.png", width, height, channels, convert2image(minima, width, height), width * channels);
+    stbi_write_png("4_watershed_result.png", width, height, channels, convert2image(watershed, width, height), width * channels);
     free(watershed);
     free(lowest_descent);
     free(border);
