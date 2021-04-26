@@ -76,12 +76,28 @@ int main(int argc, char **argv)
     CUDA_SAFE_CALL(cudaBindTexture(&offset, image, gpu_memory, width * height * sizeof(img_t)));
     dim3 threadsPerBlock(BLOCK_SIZE, BLOCK_SIZE, 1);
     dim3 blocksPerGrid(width / (threadsPerBlock.x - 2), height / (threadsPerBlock.y - 2), 1);
-    int *count;
-    CUDA_SAFE_CALL(cudaMalloc((int **)&count, sizeof(int)));
+    int *count = NULL;
+    CUDA_SAFE_CALL(cudaMallocManaged((int **)&count, sizeof(int)));
     steepest_descent_kernel<<<blocksPerGrid, threadsPerBlock>>>(gpu_memory, width, height);
     CUDA_SAFE_CALL(cudaPeekAtLastError());
     CUDA_SAFE_CALL(cudaMemcpy(cpu_lowest_descent, gpu_memory, width * height * sizeof(img_t), cudaMemcpyDeviceToHost));
+    increment_kernel<<<blocksPerGrid, threadsPerBlock>>>(gpu_memory, width, height);
+    CUDA_SAFE_CALL(cudaPeekAtLastError());
+    *count = 0;
+    int _old = -1;
+    int _new = -2;
+    while (_old != _new)
+    {
+        _old = _new;
+        border_kernel<<<blocksPerGrid, threadsPerBlock>>>(gpu_memory, count, width, height);
+        CUDA_SAFE_CALL(cudaPeekAtLastError());
+        _new = *count;
+    }
+    CUDA_SAFE_CALL(cudaMemcpy(cpu_border, gpu_memory, width * height * sizeof(img_t), cudaMemcpyDeviceToHost));
     stbi_write_png("1_lowest_descent_result.png", width, height, channels, convert2image(cpu_lowest_descent, width, height), width * channels);
+    stbi_write_png("2_border_result.png", width, height, channels, convert2image(cpu_border, width, height), width * channels);
+    stbi_write_png("3_minima_basin_result.png", width, height, channels, convert2image(cpu_minima, width, height), width * channels);
+    stbi_write_png("4_watershed_result.png", width, height, channels, convert2image(cpu_watershed, width, height), width * channels);
     return 0;
 }
 
