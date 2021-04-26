@@ -68,11 +68,20 @@ int main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
     img_ptr_t gpu_memory;
+    size_t offset = 0;
     CUDA_SAFE_CALL(cudaSetDevice(0));
     CUDA_SAFE_CALL(cudaMalloc((img_ptr_t *)&gpu_memory, width * height * sizeof(img_t)));
     CUDA_SAFE_CALL(cudaMalloc((img_ptr_t *)&image, width * height * sizeof(img_t)));
-    // CUDA_SAFE_CALL(cudaMemcpy(image, input, width * height * sizeof(img_t), cudaMemcpyHostToDevice));
     CUDA_SAFE_CALL(cudaMemcpy(gpu_memory, input, width * height * sizeof(img_t), cudaMemcpyHostToDevice));
+    CUDA_SAFE_CALL(cudaBindTexture(&offset, image, gpu_memory, width * height * sizeof(img_t)));
+    dim3 threadsPerBlock(BLOCK_SIZE, BLOCK_SIZE, 1);
+    dim3 blocksPerGrid(width / (threadsPerBlock.x - 2), height / (threadsPerBlock.y - 2), 1);
+    int *count;
+    CUDA_SAFE_CALL(cudaMalloc((int **)&count, sizeof(int)));
+    steepest_descent_kernel<<<blocksPerGrid, threadsPerBlock>>>(gpu_memory, width, height);
+    CUDA_SAFE_CALL(cudaPeekAtLastError());
+    CUDA_SAFE_CALL(cudaMemcpy(cpu_lowest_descent, gpu_memory, width * height * sizeof(img_t), cudaMemcpyDeviceToHost));
+    stbi_write_png("1_lowest_descent_result.png", width, height, channels, convert2image(cpu_lowest_descent, width, height), width * channels);
     return 0;
 }
 
