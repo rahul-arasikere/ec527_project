@@ -34,13 +34,13 @@ inline void gpuAssert(cudaError_t code, char *file, int line, bool abort = true)
     }
 }
 
-const int neighbour_x[8] = {-1, 0, 1, 1, 1, 0, -1, -1};
-const int neighbour_y[8] = {-1, -1, -1, 0, 1, 1, 1, 0};
+__constant__ int neighbour_x[8] = {-1, 0, 1, 1, 1, 0, -1, -1};
+__constant__ int neighbour_y[8] = {-1, -1, -1, 0, 1, 1, 1, 0};
 
 typedef unsigned char image_t, *image_ptr_t;
 typedef int img_t, *img_ptr_t;
 
-__shared__ img_ptr_t image;
+texture<img_t, 2, cudaReadModeElementType> image;
 
 img_ptr_t convert2data(image_ptr_t image, const int width, const int height);
 image_ptr_t convert2image(img_ptr_t image, const int width, const int height);
@@ -71,7 +71,7 @@ int main(int argc, char **argv)
     CUDA_SAFE_CALL(cudaSetDevice(0));
     CUDA_SAFE_CALL(cudaMalloc((img_ptr_t *)&gpu_memory, width * height * sizeof(img_t)));
     CUDA_SAFE_CALL(cudaMalloc((img_ptr_t *)&image, width * height * sizeof(img_t)));
-    CUDA_SAFE_CALL(cudaMemcpy(image, input, width * height * sizeof(img_t), cudaMemcpyHostToDevice));
+    // CUDA_SAFE_CALL(cudaMemcpy(image, input, width * height * sizeof(img_t), cudaMemcpyHostToDevice));
     CUDA_SAFE_CALL(cudaMemcpy(gpu_memory, input, width * height * sizeof(img_t), cudaMemcpyHostToDevice));
     return 0;
 }
