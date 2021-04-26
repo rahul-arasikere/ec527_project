@@ -42,7 +42,7 @@ int main(int argc, char **argv)
     minima_basin_kernel(input, border, &minima, width, height);
     watershed_kernel(input, minima, &watershed, width, height);
     clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &time_stop);
-    printf("Process took %f seconds\n", interval(time_start, time_stop));
+    printf("%f\n", interval(time_start, time_stop));
     stbi_write_png("1_lowest_descent_result.png", width, height, channels, convert2image(lowest_descent, width, height), width * channels);
     stbi_write_png("2_border_result.png", width, height, channels, convert2image(border, width, height), width * channels);
     stbi_write_png("3_minima_basin_result.png", width, height, channels, convert2image(minima, width, height), width * channels);

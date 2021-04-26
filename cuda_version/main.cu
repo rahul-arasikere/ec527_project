@@ -102,7 +102,7 @@ int main(int argc, char **argv)
     cudaEventSynchronize(stop);
     float milliseconds = 0;
     cudaEventElapsedTime(&milliseconds, start, stop);
-    printf("Process took %f milliseconds\n", milliseconds);
+    printf("%f\n", milliseconds);
     
 
     stbi_write_png("1_lowest_descent_result.png", width, height, channels, convert2image(cpu_lowest_descent, width, height), width * channels);
