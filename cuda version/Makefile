@@ -1,4 +1,4 @@
-NVCC := nvcc
+NVCC := nvcc -arch sm_30
 CFLAGS := -Wall -g
 PROGS = watershed
 OBJS = main.o

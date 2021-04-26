@@ -1,4 +1,4 @@
-#include <cstdio>
+include <cstdio>
 #include <cstdlib>
 #include <math.h>
 #include <time.h>
@@ -45,16 +45,12 @@ texture<img_t, 2, cudaReadModeElementType> image;
 img_ptr_t convert2data(image_ptr_t image, const int width, const int height);
 image_ptr_t convert2image(img_ptr_t image, const int width, const int height);
 __global__ void steepest_descent_kernel(img_ptr_t in_out, const int width, const int height);
-__global__ void increment_kernel(       img_ptr_t in_out, const int width, const int height);
-__global__ void border_kernel(          img_ptr_t in_out, int *count, const int width, const int height);
-__global__ void minima_basin_kernel(    img_ptr_t in_out, int *count, const int width, const int height);
-__global__ void watershed_kernel(       img_ptr_t in_out, int *count, const int width, const int height);
+__global__ void increment_kernel(img_ptr_t in_out, const int width, const int height);
+__global__ void border_kernel(img_ptr_t in_out, int *count, const int width, const int height);
+__global__ void minima_basin_kernel(img_ptr_t in_out, int *count, const int width, const int height);
+__global__ void watershed_kernel(img_ptr_t in_out, int *count, const int width, const int height);
 double interval(struct timespec start, struct timespec end);
 int main(int argc, char **argv);
-void call_kernel(img_ptr_t gpu_memory, img_ptr_t cpu_memory, int *count, int width, int height,
-                 void (*kernel)(img_ptr_t, int *, const int, const int),
-                 dim3 blocksPerGrid, dim3 threadsPerBlock);
-
 
 int main(int argc, char **argv)
 {
@@ -63,48 +59,63 @@ int main(int argc, char **argv)
     img_ptr_t input = convert2data(data, width, height);
     stbi_image_free(data);
     img_ptr_t cpu_lowest_descent = (img_ptr_t)calloc(width * height, sizeof(img_t));
-    img_ptr_t cpu_border         = (img_ptr_t)calloc(width * height, sizeof(img_t));
-    img_ptr_t cpu_minima         = (img_ptr_t)calloc(width * height, sizeof(img_t));
-    img_ptr_t cpu_watershed      = (img_ptr_t)calloc(width * height, sizeof(img_t));
+    img_ptr_t cpu_border = (img_ptr_t)calloc(width * height, sizeof(img_t));
+    img_ptr_t cpu_minima = (img_ptr_t)calloc(width * height, sizeof(img_t));
+    img_ptr_t cpu_watershed = (img_ptr_t)calloc(width * height, sizeof(img_t));
     if (cpu_border == NULL || cpu_lowest_descent == NULL || cpu_minima == NULL || cpu_watershed == NULL)
     {
         fprintf(stderr, "Failed to allocate memory!\n");
         exit(EXIT_FAILURE);
     }
     img_ptr_t gpu_memory;
-
-    cudaEvent_t start, stop;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
-    cudaEventRecord(start);
-
+    size_t offset = 0;
     CUDA_SAFE_CALL(cudaSetDevice(0));
-    CUDA_SAFE_CALL(cudaMalloc((img_t**)&gpu_memory, width * height * sizeof(img_t)));
-    CUDA_SAFE_CALL(cudaMalloc((img_t**)&image, width * height * sizeof(img_t)));
+    CUDA_SAFE_CALL(cudaMalloc((img_ptr_t *)&gpu_memory, width * height * sizeof(img_t)));
+    CUDA_SAFE_CALL(cudaMalloc((img_ptr_t *)&image, width * height * sizeof(img_t)));
     CUDA_SAFE_CALL(cudaMemcpy(gpu_memory, input, width * height * sizeof(img_t), cudaMemcpyHostToDevice));
-    CUDA_SAFE_CALL(cudaBindTexture(0, image, gpu_memory, width * height * sizeof(img_t)));
+    CUDA_SAFE_CALL(cudaBindTexture(&offset, image, gpu_memory, width * height * sizeof(img_t)));
     dim3 threadsPerBlock(BLOCK_SIZE, BLOCK_SIZE, 1);
     dim3 blocksPerGrid(width / (threadsPerBlock.x - 2), height / (threadsPerBlock.y - 2), 1);
     int *count = NULL;
+    int _old = -1;
+    int _new = -2;
     CUDA_SAFE_CALL(cudaMallocManaged((int **)&count, sizeof(int)));
     steepest_descent_kernel<<<blocksPerGrid, threadsPerBlock>>>(gpu_memory, width, height);
     CUDA_SAFE_CALL(cudaPeekAtLastError());
     CUDA_SAFE_CALL(cudaMemcpy(cpu_lowest_descent, gpu_memory, width * height * sizeof(img_t), cudaMemcpyDeviceToHost));
     increment_kernel<<<blocksPerGrid, threadsPerBlock>>>(gpu_memory, width, height);
     CUDA_SAFE_CALL(cudaPeekAtLastError());
-    call_kernel(gpu_memory, cpu_border, count, width, height, border_kernel, 
-                blocksPerGrid, threadsPerBlock);
-    call_kernel(gpu_memory, cpu_minima, count, width, height, minima_basin_kernel, 
-                blocksPerGrid, threadsPerBlock);
-    call_kernel(gpu_memory, cpu_watershed, count, width, height, watershed_kernel, 
-                blocksPerGrid, threadsPerBlock);
-    cudaEventRecord(stop);
-    cudaEventSynchronize(stop);
-    float milliseconds = 0;
-    cudaEventElapsedTime(&milliseconds, start, stop);
-    printf("Process took %f milliseconds\n", milliseconds);
-    
-
+    *count = 0;
+    while (_old != _new)
+    {
+        _old = _new;
+        border_kernel<<<blocksPerGrid, threadsPerBlock>>>(gpu_memory, count, width, height);
+        CUDA_SAFE_CALL(cudaPeekAtLastError());
+        _new = *count;
+    }
+    CUDA_SAFE_CALL(cudaMemcpy(cpu_border, gpu_memory, width * height * sizeof(img_t), cudaMemcpyDeviceToHost));
+    *count = 0;
+    _old = -1;
+    _new = -2;
+    while (_old != _new)
+    {
+        _old = _new;
+        minima_basin_kernel<<<blocksPerGrid, threadsPerBlock>>>(gpu_memory, count, width, height);
+        CUDA_SAFE_CALL(cudaPeekAtLastError());
+        _new = *count;
+    }
+    CUDA_SAFE_CALL(cudaMemcpy(cpu_minima, gpu_memory, width * height * sizeof(img_t), cudaMemcpyDeviceToHost));
+    *count = 0;
+    _old = -1;
+    _new = -2;
+    while (_old != _new)
+    {
+        _old = _new;
+        watershed_kernel<<<blocksPerGrid, threadsPerBlock>>>(gpu_memory, count, width, height);
+        CUDA_SAFE_CALL(cudaPeekAtLastError());
+        _new = *count;
+    }
+    CUDA_SAFE_CALL(cudaMemcpy(cpu_watershed, gpu_memory, width * height * sizeof(img_t), cudaMemcpyDeviceToHost));
     stbi_write_png("1_lowest_descent_result.png", width, height, channels, convert2image(cpu_lowest_descent, width, height), width * channels);
     stbi_write_png("2_border_result.png", width, height, channels, convert2image(cpu_border, width, height), width * channels);
     stbi_write_png("3_minima_basin_result.png", width, height, channels, convert2image(cpu_minima, width, height), width * channels);
@@ -112,27 +123,6 @@ int main(int argc, char **argv)
     CUDA_SAFE_CALL(cudaDeviceReset());
     return 0;
 }
-
-void call_kernel(img_ptr_t gpu_memory, img_ptr_t cpu_memory, int *count, int width, int height,
-                 void (*kernel)(img_ptr_t, int *, const int, const int),
-                 dim3 blocksPerGrid, dim3 threadsPerBlock) {
-    // printf("callling kernel...\n");
-    int _old = -1;
-    int _new = -2;
-    *count = 0;
-    while (_old != _new)
-    {
-        _old = _new;
-        kernel<<<blocksPerGrid, threadsPerBlock>>>(gpu_memory, count, width, height);
-        // Wait for GPU to finish before accessing on host
-        CUDA_SAFE_CALL(cudaDeviceSynchronize());
-        CUDA_SAFE_CALL(cudaPeekAtLastError());
-        // printf("count: %d\n", *count);
-        _new = *count;
-    }
-    CUDA_SAFE_CALL(cudaMemcpy(cpu_memory, gpu_memory, width * height * sizeof(img_t), cudaMemcpyDeviceToHost));
-}
-
 
 double interval(struct timespec start, struct timespec end)
 {
