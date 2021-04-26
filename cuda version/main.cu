@@ -1,10 +1,7 @@
-// TODO: It should be i<height in first loop and then j<width in second loop - DONE @rahulav
-// TODO: CPE calculation
-// TODO: Timing code
-
 #include <cstdio>
 #include <cstdlib>
 #include <math.h>
+#include <time.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -14,21 +11,45 @@
 #define PLATEAU 0
 #define BLOCK_SIZE 16
 
+// Convert 2D index to 1D index.
+#define INDEX(j, i, ld) ((j)*ld + (i))
+
+// Convert local (shared memory) coord to global (image) coordinate.
+#define L2I(ind, off) (((ind) / BLOCK_SIZE) * (BLOCK_SIZE - 2) - 1 + (off))
+
 // Assertion to check for errors
 #define CUDA_SAFE_CALL(ans)                           \
     {                                                 \
         gpuAssert((ans), (char *)__FILE__, __LINE__); \
     }
 
+inline void gpuAssert(cudaError_t code, char *file, int line, bool abort = true)
+{
+    if (code != cudaSuccess)
+    {
+        fprintf(stderr, "CUDA_SAFE_CALL: %s %s %d\n",
+                cudaGetErrorString(code), file, line);
+        if (abort)
+            exit(code);
+    }
+}
+
+const int neighbour_x[8] = {-1, 0, 1, 1, 1, 0, -1, -1};
+const int neighbour_y[8] = {-1, -1, -1, 0, 1, 1, 1, 0};
+
 typedef unsigned char image_t, *image_ptr_t;
 typedef int img_t, *img_ptr_t;
 
-img_ptr_t convert2data(image_ptr_t image, int width, int height);
-image_ptr_t convert2image(img_ptr_t image, int width, int height);
-__global__ void steepest_descent_kernel(img_ptr_t in, img_ptr_t *out, int width, int height);
-__global__ void border_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int height);
-__global__ void minima_basin_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int height);
-__global__ void watershed_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int height);
+__shared__ img_ptr_t image;
+
+img_ptr_t convert2data(image_ptr_t image, const int width, const int height);
+image_ptr_t convert2image(img_ptr_t image, const int width, const int height);
+__global__ void steepest_descent_kernel(img_ptr_t in_out, const int width, const int height);
+__global__ void increment_kernel(img_ptr_t in_out, const int width, const int height);
+__global__ void border_kernel(img_ptr_t in_out, int *count, const int width, const int height);
+__global__ void minima_basin_kernel(img_ptr_t in_out, int *count, const int width, const int height);
+__global__ void watershed_kernel(img_ptr_t in_out, int *count, const int width, const int height);
+double interval(struct timespec start, struct timespec end);
 int main(int argc, char **argv);
 
 int main(int argc, char **argv)
@@ -37,27 +58,48 @@ int main(int argc, char **argv)
     image_ptr_t data = stbi_load(argv[1], &width, &height, &channels, 1);
     img_ptr_t input = convert2data(data, width, height);
     stbi_image_free(data);
-    stbi_write_png("0_8_bit_img.png", width, height, channels, convert2image(input, width, height), width * channels);
-    img_ptr_t lowest_descent = NULL;
-    steepest_descent_kernel(input, &lowest_descent, width, height);
-    stbi_write_png("1_lowest_descent_result.png", width, height, channels, convert2image(lowest_descent, width, height), width * channels);
-    img_ptr_t border = NULL;
-    border_kernel(input, lowest_descent, &border, width, height);
-    stbi_write_png("2_border_result.png", width, height, channels, convert2image(border, width, height), width * channels);
-    img_ptr_t minima = NULL;
-    minima_basin_kernel(input, border, &minima, width, height);
-    stbi_write_png("3_minima_basin_result.png", width, height, channels, convert2image(minima, width, height), width * channels);
-    img_ptr_t watershed = NULL;
-    watershed_kernel(input, minima, &watershed, width, height);
-    stbi_write_png("4_watershed_result.png", width, height, channels, convert2image(watershed, width, height), width * channels);
-    free(watershed);
-    free(lowest_descent);
-    free(border);
-    free(input);
+    img_ptr_t cpu_lowest_descent = (img_ptr_t)calloc(width * height, sizeof(img_t));
+    img_ptr_t cpu_border = (img_ptr_t)calloc(width * height, sizeof(img_t));
+    img_ptr_t cpu_minima = (img_ptr_t)calloc(width * height, sizeof(img_t));
+    img_ptr_t cpu_watershed = (img_ptr_t)calloc(width * height, sizeof(img_t));
+    if (cpu_border == NULL || cpu_lowest_descent == NULL || cpu_minima == NULL || cpu_watershed == NULL)
+    {
+        fprintf(stderr, "Failed to allocate memory!\n");
+        exit(EXIT_FAILURE);
+    }
+    img_ptr_t gpu_memory;
+    CUDA_SAFE_CALL(cudaSetDevice(0));
+    CUDA_SAFE_CALL(cudaMalloc((img_ptr_t *)&gpu_memory, width * height * sizeof(img_t)));
+    CUDA_SAFE_CALL(cudaMalloc((img_ptr_t *)&image, width * height * sizeof(img_t)));
+    CUDA_SAFE_CALL(cudaMemcpy(image, input, width * height * sizeof(img_t), cudaMemcpyHostToDevice));
+    CUDA_SAFE_CALL(cudaMemcpy(gpu_memory, input, width * height * sizeof(img_t), cudaMemcpyHostToDevice));
     return 0;
 }
 
-img_ptr_t convert2data(image_ptr_t image, int width, int height)
+double interval(struct timespec start, struct timespec end)
+{
+    /*
+    This method does not require adjusting a #define constant
+
+    How to use this method:
+
+        struct timespec time_start, time_stop;
+        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &time_start);
+        // DO SOMETHING THAT TAKES TIME
+        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &time_stop);
+        measurement = interval(time_start, time_stop);*/
+    struct timespec temp;
+    temp.tv_sec = end.tv_sec - start.tv_sec;
+    temp.tv_nsec = end.tv_nsec - start.tv_nsec;
+    if (temp.tv_nsec < 0)
+    {
+        temp.tv_sec = temp.tv_sec - 1;
+        temp.tv_nsec = temp.tv_nsec + 1000000000;
+    }
+    return (((double)temp.tv_sec) + ((double)temp.tv_nsec) * 1.0e-9);
+}
+
+img_ptr_t convert2data(image_ptr_t image, const int width, const int height)
 {
     img_ptr_t temp = (img_ptr_t)calloc(width * height, sizeof(img_t));
     for (int i = 0; i < height; i++)
@@ -70,13 +112,11 @@ img_ptr_t convert2data(image_ptr_t image, int width, int height)
     return temp;
 }
 
-/* TODO: scale by minmax so image from [0-255] */
-image_ptr_t convert2image(img_ptr_t image, int width, int height)
+image_ptr_t convert2image(img_ptr_t image, const int width, const int height)
 {
     // Step 1: find min and max values from the image
-    img_t max = 0, min = INT_MAX;
+    img_t max = INT_MIN, min = INT_MAX;
     for (int i = 0; i < height; i++)
-    {
         for (int j = 0; j < width; j++)
         {
             img_t current_pixel = image[i * width + j];
@@ -85,335 +125,245 @@ image_ptr_t convert2image(img_ptr_t image, int width, int height)
             if (current_pixel > max)
                 max = current_pixel;
         }
-    }
 
-    // create a new image with the values scaled from [0-255]
+    // Step 2: create a new image with the values scaled from [0-255]
     image_ptr_t temp = (image_ptr_t)calloc(width * height, sizeof(image_t));
-    image_t max_min = max - min;
-    float_t scale = min / max_min;
+    float max_min = max - min;
     for (int i = 0; i < height; i++)
     {
         for (int j = 0; j < width; j++)
         {
-            // if(image[i * width + j] > 255 || image[i * width + j] <=0) {
-            //     printf("oops: %i\n", image[i * width + j]);
-            // }
-            temp[i * width + j] = (image_t)(((image[i * width + j] / max_min) - scale) * 255);
+            img_t pix_val = image[i * width + j];
+            float val = (pix_val - min) / max_min;
+            temp[i * width + j] = (image_t)(val * 255);
         }
     }
     return temp;
 }
 
-__global__ void steepest_descent_kernel(img_ptr_t in, img_ptr_t *out, int width, int height)
+__global__ void increment_kernel(img_ptr_t in_out, const int width, const int height)
 {
-    img_ptr_t _lowest = (img_ptr_t)calloc(width * height, sizeof(img_t));
-    if (_lowest == NULL)
+    int i = blockDim.x * blockIdx.x + threadIdx.x;
+    int j = blockDim.y * blockIdx.y + threadIdx.y;
+    int p = INDEX(j, i, width);
+
+    if (j < height && i < width && in_out[p] == PLATEAU)
     {
-        perror("Failed to allocate memory!\n");
-        exit(EXIT_FAILURE);
+        in_out[p] += 1;
     }
-    for (int i = 1; i < height - 1; i++)
-    {
-        for (int j = 1; j < width - 1; j++)
-        {
-            // find minimum in neighbors
-            img_t min = (img_t)INFINITY;
-            if (min > in[i * width + (j + 1)])
-                min = in[i * width + (j + 1)];
-            if (min > in[i * width + (j - 1)])
-                min = in[i * width + (j - 1)];
-            if (min > in[(i + 1) * width + j])
-                min = in[(i + 1) * width + j];
-            if (min > in[(i - 1) * width + j])
-                min = in[(i - 1) * width + j];
-            if (min > in[(i - 1) * width + (j + 1)])
-                min = in[(i - 1) * width + (j + 1)];
-            if (min > in[(i - 1) * width + (j - 1)])
-                min = in[(i - 1) * width + (j - 1)];
-            if (min > in[(i + 1) * width + (j + 1)])
-                min = in[(i + 1) * width + (j + 1)];
-            if (min > in[(i + 1) * width + (j - 1)])
-                min = in[(i + 1) * width + (j - 1)];
-            // check if we have plateaued
-            bool exists_q = false;
-            img_t p = in[i * width + j];
-            if (p > in[i * width + (j + 1)] && in[i * width + (j + 1)] == min)
-            {
-                _lowest[i * width + j] = -(i * width + (j + 1));
-                exists_q = true;
-                goto FOUND_LOWEST_DESCENT;
-            }
-            if (p > in[i * width + (j - 1)] && in[i * width + (j - 1)] == min)
-            {
-                _lowest[i * width + j] = -(i * width + (j - 1));
-                exists_q = true;
-                goto FOUND_LOWEST_DESCENT;
-            }
-            if (p > in[(i + 1) * width + j] && in[(i + 1) * width + j] == min)
-            {
-                _lowest[i * width + j] = -((i - 1) * width + j);
-                exists_q = true;
-                goto FOUND_LOWEST_DESCENT;
-            }
-            if (p > in[(i - 1) * width + j] && in[(i - 1) * width + j] == min)
-            {
-                _lowest[i * width + j] = -((i - 1) * width + j);
-                exists_q = true;
-                goto FOUND_LOWEST_DESCENT;
-            }
-            if (p > in[(i - 1) * width + (j + 1)] && in[(i - 1) * width + (j + 1)] == min)
-            {
-                _lowest[i * width + j] = -((i - 1) * width + (j + 1));
-                exists_q = true;
-                goto FOUND_LOWEST_DESCENT;
-            }
-            if (p > in[(i - 1) * width + (j - 1)] && in[(i - 1) * width + (j - 1)] == min)
-            {
-                _lowest[i * width + j] = -((i - 1) * width + (j - 1));
-                exists_q = true;
-                goto FOUND_LOWEST_DESCENT;
-            }
-            if (p > in[(i + 1) * width + (j + 1)] && in[(i + 1) * width + (j + 1)] == min)
-            {
-                _lowest[i * width + j] = -((i + 1) * width + (j + 1));
-                exists_q = true;
-                goto FOUND_LOWEST_DESCENT;
-            }
-            if (p > in[(i + 1) * width + (j - 1)] && in[(i + 1) * width + (j - 1)] == min)
-            {
-                _lowest[i * width + j] = -((i + 1) * width + (j - 1));
-                exists_q = true;
-                goto FOUND_LOWEST_DESCENT;
-            }
-        FOUND_LOWEST_DESCENT:
-            if (!exists_q)
-            {
-                _lowest[i * width + j] = (img_t)PLATEAU;
-            }
-        }
-    }
-    *out = _lowest;
 }
 
-__global__ void border_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int height)
+__global__ void steepest_descent_kernel(img_ptr_t in_out, const int width, const int height)
 {
-    img_ptr_t _border = (img_ptr_t)calloc(width * height, sizeof(img_t));
-    if (in == NULL)
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
+    int bx = blockIdx.x;
+    int by = blockIdx.y;
+    int bdx = blockDim.x;
+    int bdy = blockDim.y;
+    int i = bdx * bx + tx;
+    int j = bdy * by + ty;
+
+    __shared__ float s_I[BLOCK_SIZE * BLOCK_SIZE];
+    int size = BLOCK_SIZE - 2;
+    int img_x = L2I(i, tx);
+    int img_y = L2I(j, ty);
+    int new_w = width + width * 2;
+    int new_h = height + height * 2;
+    int p = INDEX(img_y, img_x, width);
+
+    int ghost = (tx == 0 || ty == 0 ||
+                 tx == bdx - 1 || ty == bdy - 1);
+
+    if ((bx == 0 && tx == 0) || (by == 0 && ty == 0) ||
+        (bx == (width / size - 1) && tx == bdx - 1) ||
+        (by == (height / size - 1) && ty == bdy - 1))
     {
-        perror("Failed to allocate memory!\n");
-        exit(EXIT_FAILURE);
+        s_I[INDEX(ty, tx, BLOCK_SIZE)] = INFINITY;
     }
-    bool stable = false;
-    img_ptr_t temp_border = (img_ptr_t)calloc(width * height, sizeof(img_t));
-    if (temp_border == NULL)
+    else
     {
-        perror("Failed to allocate memory!\n");
-        exit(EXIT_FAILURE);
-    };
-    while (!stable)
+        s_I[INDEX(ty, tx, BLOCK_SIZE)] = tex2D(image, img_x, img_y);
+    }
+
+    __syncthreads();
+
+    if (j < new_h && i < new_w && ghost == 0)
     {
-        stable = true;
-        memcpy(temp_border, _border, width * height * sizeof(img_t));
-        for (int i = 1; i < height - 1; i++)
+        float I_q_min = INFINITY;
+        float I_p = tex2D(image, img_x, img_y);
+
+        int exists_q = 0;
+
+        for (int k = 0; k < 8; k++)
         {
-            for (int j = 1; j < width - 1; j++)
+            int n_x = neighbour_x[k] + tx;
+            int n_y = neighbour_y[k] + ty;
+            float I_q = s_I[INDEX(n_y, n_x, BLOCK_SIZE)];
+            if (I_q < I_q_min)
+                I_q_min = I_q;
+        }
+
+        for (int k = 0; k < 8; k++)
+        {
+            int x = neighbour_x[k];
+            int y = neighbour_y[k];
+            int n_x = x + tx;
+            int n_y = y + ty;
+            int n_tx = L2I(i, n_x);
+            int n_ty = L2I(j, n_y);
+            float I_q = s_I[INDEX(n_y, n_x, BLOCK_SIZE)];
+            int q = INDEX(n_ty, n_tx, width);
+            if (I_q < I_p && I_q == I_q_min)
             {
-                if (in[i * width + j] == (img_t)PLATEAU)
-                {
-                    if (in[i * width + (j + 1)] < 0 && image[i * width + (j + 1)] == image[i * width + j])
-                    {
-                        if (temp_border[i * width + j] != -(i * width + (j + 1)))
-                            stable = false;
-                        temp_border[i * width + j] = -(i * width + (j + 1));
-                        break;
-                    }
-                    if (in[i * width + (j - 1)] < 0 && image[i * width + (j - 1)] == image[i * width + j])
-                    {
-                        if (temp_border[i * width + j] != -(i * width + (j - 1)))
-                            stable = false;
-                        temp_border[i * width + j] = -(i * width + (j - 1));
-                        break;
-                    }
-                    if (in[(i + 1) * width + (j + 1)] < 0 && image[(i + 1) * width + (j + 1)] == image[i * width + j])
-                    {
-                        if (temp_border[i * width + j] != -((i + 1) * width + (j + 1)))
-                            stable = false;
-                        temp_border[i * width + j] = -((i + 1) * width + (j + 1));
-                        break;
-                    }
-                    if (in[(i + 1) * width + (j - 1)] < 0 && image[(i + 1) * width + (j - 1)] == image[i * width + j])
-                    {
-                        if (temp_border[i * width + j] != -((i + 1) * width + (j - 1)))
-                            stable = false;
-                        temp_border[i * width + j] = -((i + 1) * width + (j - 1));
-                        break;
-                    }
-                    if (in[(i - 1) * width + (j + 1)] < 0 && image[(i - 1) * width + (j + 1)] == image[i * width + j])
-                    {
-                        if (temp_border[i * width + j] != -((i - 1) * width + (j + 1)))
-                            stable = false;
-                        temp_border[i * width + j] = -((i - 1) * width + (j + 1));
-                        break;
-                    }
-                    if (in[(i - 1) * width + (j - 1)] < 0 && image[(i - 1) * width + (j - 1)] == image[i * width + j])
-                    {
-                        if (temp_border[i * width + j] != -((i - 1) * width + (j - 1)))
-                            stable = false;
-                        temp_border[i * width + j] = -((i - 1) * width + (j - 1));
-                        break;
-                    }
-                    if (in[(i + 1) * width + j] < 0 && image[(i + 1) * width + j] == image[i * width + j])
-                    {
-                        if (temp_border[i * width + j] != -((i + 1) * width + j))
-                            stable = false;
-                        temp_border[i * width + j] = -((i + 1) * width + j);
-                        break;
-                    }
-                    if (in[(i - 1) * width + j] < 0 && image[(i - 1) * width + j] == image[i * width + j])
-                    {
-                        if (temp_border[i * width + j] != -((i - 1) * width + j))
-                            stable = false;
-                        temp_border[i * width + j] = -((i - 1) * width + j);
-                        break;
-                    }
-                }
+                in_out[p] = -q;
+                exists_q = 1;
+                break;
             }
         }
-        memcpy(_border, temp_border, width * height * sizeof(img_t));
+        if (exists_q == 0)
+            in_out[p] = PLATEAU;
     }
-    for (int i = 0; i < height; i++)
-    {
-        for (int j = 0; j < width; j++)
-        {
-            if (in[i * width + j] == (img_t)PLATEAU)
-            {
-                _border[i * width + j] = -(i * width + j);
-            }
-        }
-    }
-    *out = _border;
 }
 
-__global__ void minima_basin_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int height)
+__global__ void border_kernel(img_ptr_t in_out, int *count, const int width, const int height)
 {
-    img_ptr_t _minima = (img_ptr_t)calloc(width * height, sizeof(img_t));
-    if (_minima == NULL)
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
+    int bx = blockIdx.x;
+    int by = blockIdx.y;
+    int bdx = blockDim.x;
+    int bdy = blockDim.y;
+    int i = bdx * bx + tx;
+    int j = bdy * by + ty;
+
+    __shared__ float s_L[BLOCK_SIZE * BLOCK_SIZE];
+    int size = BLOCK_SIZE - 2;
+    int img_x = L2I(i, tx);
+    int img_y = L2I(j, ty);
+    int true_p = INDEX(img_y, img_x, width);
+    int s_p = INDEX(ty, tx, BLOCK_SIZE);
+    int new_w = width + width * 2;
+    int new_h = height + height * 2;
+    int ghost = (tx == 0 || ty == 0 ||
+                 tx == bdx - 1 || ty == bdy - 1)
+                    ? 1
+                    : 0;
+
+    if ((bx == 0 && tx == 0) || (by == 0 && ty == 0) ||
+        (bx == (width / size - 1) && tx == bdx - 1) ||
+        (by == (height / size - 1) && ty == bdy - 1))
     {
-        perror("Failed to allocate memory!\n");
-        exit(EXIT_FAILURE);
+        s_L[INDEX(ty, tx, BLOCK_SIZE)] = INFINITY;
     }
-    memcpy(_minima, in, height * width * sizeof(img_t));
-    bool stable = false;
-    while (!stable)
+    else
     {
-        stable = true;
-        for (int i = 1; i < height - 1; i++)
+        s_L[s_p] = in_out[INDEX(img_y, img_x, width)];
+    }
+
+    __syncthreads();
+
+    int active = (j < new_h && i < new_w && s_L[s_p] > 0) ? 1 : 0;
+
+    if (active == 1 && ghost == 0)
+    {
+        for (int k = 0; k < 8; k++)
         {
-            for (int j = 1; j < width - 1; j++)
-            {
-                if (_minima[i * width + j] > (img_t)PLATEAU)
-                {
-                    img_t label = (img_t)INFINITY;
-                    if (_minima[i * width + (j + 1)] < label && image[i * width + (j + 1)] == image[i * width + j])
-                    {
-                        label = _minima[i * width + (j + 1)];
-                    }
-                    if (_minima[i * width + (j - 1)] < label && image[i * width + (j - 1)] == image[i * width + j])
-                    {
-                        label = _minima[i * width + (j - 1)];
-                    }
-                    if (_minima[(i + 1) * width + (j + 1)] < label && image[(i + 1) * width + (j + 1)] == image[i * width + j])
-                    {
-                        label = _minima[(i + 1) * width + (j + 1)];
-                    }
-                    if (_minima[(i + 1) * width + (j - 1)] < label && image[(i + 1) * width + (j - 1)] == image[i * width + j])
-                    {
-                        label = _minima[(i + 1) * width + (j - 1)];
-                    }
-                    if (_minima[(i - 1) * width + (j + 1)] < label && image[(i - 1) * width + (j + 1)] == image[i * width + j])
-                    {
-                        label = _minima[(i - 1) * width + (j + 1)];
-                    }
-                    if (_minima[(i - 1) * width + (j - 1)] < label && image[(i - 1) * width + (j - 1)] == image[i * width + j])
-                    {
-                        label = _minima[(i - 1) * width + (j - 1)];
-                    }
-                    if (_minima[(i + 1) * width + j] < label && image[(i + 1) * width + j] == image[i * width + j])
-                    {
-                        label = _minima[(i + 1) * width + j];
-                    }
-                    if (_minima[(i - 1) * width + j] < label && image[(i - 1) * width + j] == image[i * width + j])
-                    {
-                        label = _minima[(i - 1) * width + j];
-                    }
-                    if (label < _minima[i * width + j])
-                    {
-                        if (_minima[_minima[i * width + j]] != label)
-                        {
-                            stable = false;
-                        }
-                        _minima[_minima[i * width + j]] = label;
-                    }
-                }
-            }
+            int n_x = neighbour_x[k] + tx;
+            int n_y = neighbour_y[k] + ty;
+            int s_q = INDEX(n_y, n_x, BLOCK_SIZE);
+            if (s_L[s_q] == INFINITY)
+                continue;
+            if (s_L[s_q] > s_L[s_p])
+                s_L[s_p] = s_L[s_q];
         }
-        for (int i = 1; i < height - 1; i++)
+        if (in_out[true_p] != s_L[s_p])
         {
-            for (int j = 1; j < width - 1; j++)
-            {
-                if (_minima[i * width + j] > (img_t)PLATEAU)
-                {
-                    img_t label = _minima[i * width + j];
-                    img_t ref = (img_t)INFINITY;
-                    while (label != ref)
-                    {
-                        ref = label;
-                        label = _minima[ref];
-                    }
-                    if (label != ref)
-                    {
-                        stable = false;
-                    }
-                    _minima[i * width + j] = label;
-                }
-            }
+            in_out[true_p] = s_L[s_p];
+            atomicAdd(count, 1);
         }
     }
-    *out = _minima;
 }
 
-__global__ void watershed_kernel(img_ptr_t image, img_ptr_t in, img_ptr_t *out, int width, int height)
+__global__ void minima_basin_kernel(img_ptr_t in_out, int *count, const int width, const int height)
 {
-    img_ptr_t _watershed = (img_ptr_t)calloc(height * width, sizeof(img_t));
-    if (_watershed == NULL)
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
+    int bx = blockIdx.x;
+    int by = blockIdx.y;
+    int bdx = blockDim.x;
+    int bdy = blockDim.y;
+    int i = bdx * bx + tx;
+    int j = bdy * by + ty;
+
+    __shared__ float s_L[BLOCK_SIZE * BLOCK_SIZE];
+    int size = BLOCK_SIZE - 2;
+    int img_x = L2I(i, tx);
+    int img_y = L2I(j, ty);
+    int true_p = INDEX(img_y, img_x, width);
+    int p = INDEX(ty, tx, BLOCK_SIZE);
+    int new_w = width + width * 2;
+    int new_h = height + height * 2;
+    int ghost = (tx == 0 || ty == 0 ||
+                 tx == bdx - 1 || ty == bdy - 1);
+
+    // Load data into shared memory.
+    if ((bx == 0 && tx == 0) || (by == 0 && ty == 0) ||
+        (bx == (width / size - 1) && tx == bdx - 1) ||
+        (by == (height / size - 1) && ty == bdy - 1))
     {
-        perror("Failed to allocate memory!\n");
-        exit(EXIT_FAILURE);
+        s_L[INDEX(ty, tx, BLOCK_SIZE)] = INFINITY;
     }
-    memcpy(_watershed, in, height * width * sizeof(img_t));
-    for (int i = 0; i < height; i++)
+    else
     {
-        for (int j = 0; j < width; j++)
-        {
-            _watershed[i * width + j] = abs(_watershed[i * width + j]);
-        }
+        s_L[INDEX(ty, tx, BLOCK_SIZE)] = in_out[INDEX(img_y, img_x, width)];
     }
-    for (int i = 1; i < height - 1; i++)
+
+    __syncthreads();
+
+    if (j < new_h && i < new_w &&
+        s_L[p] == PLATEAU && ghost == 0)
     {
-        for (int j = 1; j < width - 1; j++)
+        float I_p = tex2D(image, img_x, img_y);
+        float I_q;
+        int n_x, n_y;
+        float L_q;
+
+        for (int k = 0; k < 8; k++)
         {
-            img_t label = _watershed[i * width + j];
-            if (label != (i * width + j))
+            n_x = neighbour_x[k] + tx;
+            n_y = neighbour_y[k] + ty;
+            L_q = s_L[INDEX(n_y, n_x, BLOCK_SIZE)];
+            if (L_q == INFINITY || L_q >= 0)
+                continue;
+            int n_tx = L2I(i, n_x);
+            int n_ty = L2I(j, n_y);
+            int q = INDEX(n_ty, n_tx, width);
+            I_q = tex2D(image, n_tx, n_ty);
+            if (I_q == I_p && in_out[true_p] != -q)
             {
-                img_t ref = (img_t)INFINITY;
-                while (ref != label)
-                {
-                    ref = label;
-                    label = _watershed[ref];
-                }
-                _watershed[i * width + j] = label;
+                in_out[true_p] = -q;
+                atomicAdd(count, 1);
+                break;
             }
         }
     }
-    *out = _watershed;
+}
+
+__global__ void watershed_kernel(img_ptr_t in_out, int *count, const int width, const int height)
+{
+    int i = blockDim.x * blockIdx.x + threadIdx.x;
+    int j = blockDim.y * blockIdx.y + threadIdx.y;
+    int p = INDEX(j, i, width);
+    int q;
+
+    if (j < height && i < width && in_out[p] <= 0)
+    {
+        q = -in_out[p];
+        if (in_out[q] > 0 && in_out[p] != in_out[q])
+        {
+            in_out[p] = in_out[q];
+            atomicAdd(count, 1);
+        }
+    }
 }
