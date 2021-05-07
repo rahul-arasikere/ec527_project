@@ -7,7 +7,7 @@ LD_LIBRARY = -lm
 all: $(PROGS)
 
 watershed: $(OBJS)
-	$(CC) $(CFLAGS) -o $@ $^ $(LD_LIBRARY)
+	$(CC) $(CFLAGS) -fopenmp -o $@ $^ $(LD_LIBRARY)
 
 %.o: %.c
 	$(CC) $(CFLAGS) -o $@ -c $^ $(LD_LIBRARY)
