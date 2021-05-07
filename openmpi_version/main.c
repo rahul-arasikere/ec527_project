@@ -1,6 +1,4 @@
-// TODO: It should be i<height in first loop and then j<width in second loop - DONE @rahulav
-// TODO: CPE calculation
-// TODO: Timing code
+
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -102,8 +100,8 @@ image_ptr_t convert2image(img_ptr_t image, int width, int height)
         }
     }
 
-    printf("min: %i\n", min);
-    printf("max: %i\n", max);
+    // printf("min: %i\n", min);
+    // printf("max: %i\n", max);
 
     // create a new image with the values scaled from [0-255]
     image_ptr_t temp = (image_ptr_t)calloc(width * height, sizeof(image_t));
